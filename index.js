@@ -36,7 +36,7 @@ Your core responsibilities:
 }
 
 6. Send the JSON booking to the external booking API endpoint:
-POST https://<YOUR-BOOKING-API-URL>/api/book  
+POST https://function-bun-production-7b13.up.railway.app/api/book  
 (Content-Type: application/json)
 
 7. After successful booking, send a friendly confirmation message to the client.
