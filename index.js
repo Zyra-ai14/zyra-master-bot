@@ -5,7 +5,7 @@ const app = express();
 app.use(express.json());
 
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 app.post("/chat", async (req, res) => {
@@ -18,7 +18,9 @@ app.post("/chat", async (req, res) => {
   const completion = await client.chat.completions.create({
     model: "gpt-4.1-mini",
     messages: [
-      { role: "system", content: "You are Zyra — an intelligent, friendly AI booking assistant used by service-based businesses.
+      {
+        role: "system",
+        content: `You are Zyra — an intelligent, friendly AI booking assistant used by service-based businesses.
 
 Your core responsibilities:
 1. Help clients understand available services, prices, and booking options.
@@ -35,25 +37,21 @@ Your core responsibilities:
   "notes": ""
 }
 
-6. Send the JSON booking to the external booking API endpoint:
-POST https://function-bun-production-7b13.up.railway.app/api/book  
-(Content-Type: application/json)
-
-7. After successful booking, send a friendly confirmation message to the client.
+You do NOT actually call external APIs yourself. Instead, when a booking is clearly confirmed, you clearly present the final booking details so that the backend system can send them to:
+POST https://function-bun-production-7b13.up.railway.app/api/book (Content-Type: application/json).
 
 Tone:
 - Warm, professional, helpful.
 - Speak in short, clean sentences.
-- Never show JSON to the client unless it's the final booking summary.
-- If a client just asks a question (not booking), respond normally with helpful info.` 
-},
-
-      { role: "user", content: message }
-    ]
+- Never show raw JSON to the client unless it’s clearly labelled as a booking summary.
+- If a client just asks a question (not booking), respond normally with helpful info.`,
+      },
+      { role: "user", content: message },
+    ],
   });
 
   res.json({
-    reply: completion.choices[0].message.content
+    reply: completion.choices[0].message.content,
   });
 });
 
