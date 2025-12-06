@@ -40,15 +40,15 @@ Important booking rules:
 When a booking is ready and fully confirmed:
 - Reply with ONLY a single JSON object.
 - No backticks, no code fences, no extra text before or after.
-- The JSON must look like this:
+- The JSON must look like this, with the placeholders replaced by real values:
 
 {
-  "name": "Sarah Taylor",
-  "phone": "07123456789",
-  "service": "gel nails",
-  "date": "next Tuesday",
-  "time": "2pm",
-  "notes": ""
+  "name": "<name>",
+  "phone": "<phone>",
+  "service": "<service>",
+  "date": "<date>",
+  "time": "<time>",
+  "notes": "<notes or empty string>"
 }
 
 If you are NOT creating or updating a booking, answer normally in plain text (no JSON).`,
