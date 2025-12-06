@@ -15,6 +15,7 @@ app.post("/chat", async (req, res) => {
     return res.json({ reply: "You didn’t send a message." });
   }
 
+  // Ask Zyra for a response
   const completion = await client.chat.completions.create({
     model: "gpt-4.1-mini",
     messages: [
@@ -33,7 +34,7 @@ Important booking rules:
 - If the date or time is written in natural language (for example: "next Tuesday", "tomorrow at 2pm", "this Friday morning"), DO NOT ask the user to clarify it into an exact calendar date. Just copy the phrase exactly as they wrote it into the "date" and "time" fields.
 
 When a booking is ready:
-5. Prepare a booking summary in clean JSON format ONLY, with no explanation around it:
+5. Prepare a booking summary in clean JSON format, even if you also surround it with normal text. The JSON MUST be valid and look like:
 {
   "name": "<name>",
   "phone": "<phone>",
@@ -43,7 +44,7 @@ When a booking is ready:
   "notes": "<notes or empty string>"
 }
 
-You do NOT actually call external APIs yourself. Instead, when a booking is clearly confirmed, you output ONLY that JSON so that the backend system can send it to:
+You do NOT actually call external APIs yourself. Instead, when a booking is clearly confirmed, you include that JSON block in your reply so that the backend system can extract it and send it to:
 POST https://function-bun-production-7b13.up.railway.app/api/book (Content-Type: application/json).
 
 Tone:
@@ -55,8 +56,64 @@ Tone:
     ],
   });
 
+  const content = completion.choices[0]?.message?.content || "";
+  let finalReply = content;
+
+  // Try to extract JSON booking from Zyra's reply
+  let bookingData = null;
+  const start = content.indexOf("{");
+  const end = content.lastIndexOf("}");
+
+  if (start !== -1 && end !== -1 && end > start) {
+    const jsonText = content.slice(start, end + 1);
+    try {
+      const parsed = JSON.parse(jsonText);
+
+      if (
+        parsed.name &&
+        parsed.phone &&
+        parsed.service &&
+        parsed.date &&
+        parsed.time
+      ) {
+        bookingData = parsed;
+      }
+    } catch (err) {
+      // JSON parse failed – ignore and fall back to normal reply
+      console.error("Failed to parse booking JSON:", err);
+    }
+  }
+
+  // If we have valid booking JSON, send it to the booking API
+  if (bookingData) {
+    try {
+      const apiResponse = await fetch(
+        "https://function-bun-production-7b13.up.railway.app/api/book",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bookingData),
+        }
+      );
+
+      if (!apiResponse.ok) {
+        throw new Error(`Booking API error: ${apiResponse.status}`);
+      }
+
+      const apiJson = await apiResponse.json();
+      console.log("Booking created:", apiJson);
+
+      // Clean confirmation message for the client
+      finalReply = `You're booked for ${bookingData.service} on ${bookingData.date} at ${bookingData.time} under ${bookingData.name}. If anything is wrong, reply here and I'll help adjust it.`;
+    } catch (error) {
+      console.error("Error calling booking API:", error);
+      finalReply =
+        "I tried to create your booking but something went wrong on the system side. Please try again in a moment or contact the business directly.";
+    }
+  }
+
   res.json({
-    reply: completion.choices[0].message.content,
+    reply: finalReply,
   });
 });
 
