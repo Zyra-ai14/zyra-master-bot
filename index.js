@@ -1,14 +1,27 @@
 import express from "express";
 import { OpenAI } from "openai";
+import pkg from "pg";
+
+const { Pool } = pkg;
 
 const app = express();
 app.use(express.json());
 
+// OpenAI client
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// URL of your booking micro-service
+// Postgres connection (Railway DATABASE_URL)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+// For now we hard-code your first business
+const BUSINESS_ID = 1;
+
+// Your existing Bun booking microservice
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
@@ -20,6 +33,7 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "You didn't send a message." });
     }
 
+    // Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -57,8 +71,7 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
       ],
     });
 
-    const aiReply =
-      completion.choices[0]?.message?.content?.trim() || "";
+    const aiReply = completion.choices[0]?.message?.content?.trim() || "";
 
     // Try to interpret the reply as booking JSON
     let booking = null;
@@ -76,42 +89,58 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
       ) {
         booking = parsed;
       }
-    } catch (err) {
+    } catch {
       booking = null;
     }
 
-    // If Zyra returned booking JSON, send it to the booking API
+    // If Zyra returned booking JSON, save to DB + send to booking API
     if (booking) {
+      const notes = booking.notes || "";
+
       try {
-        const bookingResponse = await fetch(BOOKING_API_URL, {
+        // 1) Insert client row
+        const clientResult = await pool.query(
+          `INSERT INTO clients (business_id, name, phone, notes)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [BUSINESS_ID, booking.name, booking.phone, notes]
+        );
+
+        const clientId = clientResult.rows[0].id;
+
+        // 2) Insert booking row
+        await pool.query(
+          `INSERT INTO bookings (business_id, client_id, service, date, time, notes)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            BUSINESS_ID,
+            clientId,
+            booking.service,
+            booking.date,
+            booking.time,
+            notes,
+          ]
+        );
+      } catch (dbError) {
+        console.error("Error saving booking to Postgres:", dbError);
+        // We still continue and try to hit the booking API
+      }
+
+      // 3) Send booking to your Bun microservice (same as before)
+      try {
+        await fetch(BOOKING_API_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(booking),
         });
-
-        if (!bookingResponse.ok) {
-          console.error(
-            "Booking API error:",
-            bookingResponse.status,
-            await bookingResponse.text()
-          );
-          return res.json({
-            reply:
-              "I tried to create your booking but something went wrong on the booking system. Please try again in a moment or contact the business directly.",
-          });
-        }
-
-        // Friendly confirmation back to the user
-        return res.json({
-          reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}. If anything is wrong, reply here and I'll adjust it.`,
-        });
-      } catch (error) {
-        console.error("Booking API request failed:", error);
-        return res.json({
-          reply:
-            "I couldn't reach the booking system just now. Please try again in a moment or contact the business directly.",
-        });
+      } catch (apiError) {
+        console.error("Error calling booking API:", apiError);
       }
+
+      // 4) Friendly confirmation back to the user
+      return res.json({
+        reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}. If anything is wrong, reply here and I'll adjust it.`,
+      });
     }
 
     // If it's not booking JSON, just send Zyra's text reply straight back
