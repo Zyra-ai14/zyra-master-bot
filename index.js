@@ -18,12 +18,47 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// Default business slug for now (later: one per salon/gym/barber etc)
-const DEFAULT_BUSINESS_SLUG = "demo";
-
 // Your existing Bun booking microservice
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
+
+/**
+ * Helper: find business_id by slug.
+ * Falls back to 'zyra-test-salon' if slug is missing or not found.
+ */
+async function getBusinessIdFromSlug(slugFromRequest) {
+  // Default slug if none provided
+  const slug = slugFromRequest && slugFromRequest.trim()
+    ? slugFromRequest.trim()
+    : "zyra-test-salon";
+
+  try {
+    const result = await pool.query(
+      "SELECT id FROM businesses WHERE slug = $1",
+      [slug]
+    );
+
+    if (result.rows.length > 0) {
+      return result.rows[0].id;
+    }
+
+    // If slug not found, fall back to zyra-test-salon
+    const fallback = await pool.query(
+      "SELECT id FROM businesses WHERE slug = $1",
+      ["zyra-test-salon"]
+    );
+
+    if (fallback.rows.length > 0) {
+      return fallback.rows[0].id;
+    }
+
+    // Last-resort fallback if DB is empty
+    return 1;
+  } catch (err) {
+    console.error("Error looking up business by slug:", err);
+    return 1;
+  }
+}
 
 app.post("/chat", async (req, res) => {
   try {
@@ -33,25 +68,10 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "You didn't send a message." });
     }
 
-    // 1) Figure out which business this chat belongs to (by slug)
-    const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
+    // Resolve which business this chat is for
+    const BUSINESS_ID = await getBusinessIdFromSlug(businessSlug);
 
-    const businessResult = await pool.query(
-      "SELECT id FROM businesses WHERE slug = $1",
-      [slug]
-    );
-
-    const businessId = businessResult.rows[0]?.id;
-
-    if (!businessId) {
-      console.error("No business found for slug:", slug);
-      return res.json({
-        reply:
-          "I couldn't find the business configuration for this chat. Please contact support.",
-      });
-    }
-
-    // 2) Ask Zyra what to do
+    // Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -91,7 +111,7 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
 
     const aiReply = completion.choices[0]?.message?.content?.trim() || "";
 
-    // 3) Try to interpret the reply as booking JSON
+    // Try to interpret the reply as booking JSON
     let booking = null;
 
     try {
@@ -111,27 +131,27 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
       booking = null;
     }
 
-    // 4) If Zyra returned booking JSON, save to DB + send to booking API
+    // If Zyra returned booking JSON, save to DB + send to booking API
     if (booking) {
       const notes = booking.notes || "";
 
       try {
-        // Insert client row
+        // 1) Insert client row
         const clientResult = await pool.query(
           `INSERT INTO clients (business_id, name, phone, notes)
            VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [businessId, booking.name, booking.phone, notes]
+          [BUSINESS_ID, booking.name, booking.phone, notes]
         );
 
         const clientId = clientResult.rows[0].id;
 
-        // Insert booking row
+        // 2) Insert booking row
         await pool.query(
           `INSERT INTO bookings (business_id, client_id, service, date, time, notes)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
-            businessId,
+            BUSINESS_ID,
             clientId,
             booking.service,
             booking.date,
@@ -144,7 +164,7 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
         // We still continue and try to hit the booking API
       }
 
-      // Send booking to your Bun microservice
+      // 3) Send booking to your Bun microservice (same as before)
       try {
         await fetch(BOOKING_API_URL, {
           method: "POST",
@@ -155,13 +175,13 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
         console.error("Error calling booking API:", apiError);
       }
 
-      // Friendly confirmation back to the user
+      // 4) Friendly confirmation back to the user
       return res.json({
         reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}. If anything is wrong, reply here and I'll adjust it.`,
       });
     }
 
-    // 5) If it's not booking JSON, just send Zyra's text reply straight back
+    // If it's not booking JSON, just send Zyra's text reply straight back
     return res.json({ reply: aiReply });
   } catch (error) {
     console.error("Chat endpoint error:", error);
