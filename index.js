@@ -18,8 +18,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// For now we hard-code your first business
-const BUSINESS_ID = 1;
+// Default business slug for now (later: one per salon/gym/barber etc)
+const DEFAULT_BUSINESS_SLUG = "demo";
 
 // Your existing Bun booking microservice
 const BOOKING_API_URL =
@@ -27,13 +27,31 @@ const BOOKING_API_URL =
 
 app.post("/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, businessSlug } = req.body;
 
     if (!message) {
       return res.json({ reply: "You didn't send a message." });
     }
 
-    // Ask Zyra what to do
+    // 1) Figure out which business this chat belongs to (by slug)
+    const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
+
+    const businessResult = await pool.query(
+      "SELECT id FROM businesses WHERE slug = $1",
+      [slug]
+    );
+
+    const businessId = businessResult.rows[0]?.id;
+
+    if (!businessId) {
+      console.error("No business found for slug:", slug);
+      return res.json({
+        reply:
+          "I couldn't find the business configuration for this chat. Please contact support.",
+      });
+    }
+
+    // 2) Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -73,7 +91,7 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
 
     const aiReply = completion.choices[0]?.message?.content?.trim() || "";
 
-    // Try to interpret the reply as booking JSON
+    // 3) Try to interpret the reply as booking JSON
     let booking = null;
 
     try {
@@ -93,27 +111,27 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
       booking = null;
     }
 
-    // If Zyra returned booking JSON, save to DB + send to booking API
+    // 4) If Zyra returned booking JSON, save to DB + send to booking API
     if (booking) {
       const notes = booking.notes || "";
 
       try {
-        // 1) Insert client row
+        // Insert client row
         const clientResult = await pool.query(
           `INSERT INTO clients (business_id, name, phone, notes)
            VALUES ($1, $2, $3, $4)
            RETURNING id`,
-          [BUSINESS_ID, booking.name, booking.phone, notes]
+          [businessId, booking.name, booking.phone, notes]
         );
 
         const clientId = clientResult.rows[0].id;
 
-        // 2) Insert booking row
+        // Insert booking row
         await pool.query(
           `INSERT INTO bookings (business_id, client_id, service, date, time, notes)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
-            BUSINESS_ID,
+            businessId,
             clientId,
             booking.service,
             booking.date,
@@ -126,7 +144,7 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
         // We still continue and try to hit the booking API
       }
 
-      // 3) Send booking to your Bun microservice (same as before)
+      // Send booking to your Bun microservice
       try {
         await fetch(BOOKING_API_URL, {
           method: "POST",
@@ -137,13 +155,13 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
         console.error("Error calling booking API:", apiError);
       }
 
-      // 4) Friendly confirmation back to the user
+      // Friendly confirmation back to the user
       return res.json({
         reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}. If anything is wrong, reply here and I'll adjust it.`,
       });
     }
 
-    // If it's not booking JSON, just send Zyra's text reply straight back
+    // 5) If it's not booking JSON, just send Zyra's text reply straight back
     return res.json({ reply: aiReply });
   } catch (error) {
     console.error("Chat endpoint error:", error);
