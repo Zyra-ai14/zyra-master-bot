@@ -25,6 +25,64 @@ const DEFAULT_BUSINESS_SLUG = "demo";
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
+/**
+ * Simple Levenshtein distance for fuzzy matching
+ */
+function levenshtein(a, b) {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+
+  const matrix = Array.from({ length: a.length + 1 }, () =>
+    new Array(b.length + 1).fill(0)
+  );
+
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1, // deletion
+        matrix[i][j - 1] + 1, // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+
+  return matrix[a.length][b.length];
+}
+
+/**
+ * Pick the best-matching service name given what the AI/user wrote.
+ * We compare the "service" field to all known service names and choose
+ * the one with the lowest Levenshtein distance, as long as it's not crazy far.
+ */
+function pickBestServiceName(rawName, serviceNames) {
+  if (!rawName || serviceNames.length === 0) return rawName;
+
+  let bestName = rawName;
+  let bestScore = Infinity;
+
+  for (const name of serviceNames) {
+    const dist = levenshtein(rawName, name);
+    if (dist < bestScore) {
+      bestScore = dist;
+      bestName = name;
+    }
+  }
+
+  // Optional: if the distance is huge, maybe keep original
+  // Here we allow some tolerance: if it's wildly different (e.g. > half the length)
+  const maxReasonable = Math.max(3, Math.floor(bestName.length / 2));
+  if (bestScore > maxReasonable) {
+    // Too different, keep the raw value so we can see weird cases later
+    return rawName;
+  }
+
+  return bestName;
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
@@ -60,13 +118,13 @@ app.post("/chat", async (req, res) => {
     );
 
     const services = servicesResult.rows;
+    const serviceNames = services.map((s) => s.name);
 
     let servicesText;
     if (services.length === 0) {
       servicesText =
         "This business has no services configured yet. If a user asks to book, politely explain that booking is not available yet.";
     } else {
-      // Turn the services into a simple text list for the prompt
       servicesText =
         services
           .map((s) => `- ${s.name}`)
@@ -179,8 +237,14 @@ If you are NOT creating or updating a booking, answer normally in plain text (no
       booking = null;
     }
 
-    // 5) If Zyra returned booking JSON, save to DB + send to booking API
+    // 5) If Zyra returned booking JSON, normalise the service name using fuzzy matching,
+    //    then save to DB + send to booking API
     if (booking) {
+      // Fuzzy-match the chosen service to one of the real service names
+      if (serviceNames.length > 0 && booking.service) {
+        booking.service = pickBestServiceName(booking.service, serviceNames);
+      }
+
       const notes = booking.notes || "";
 
       try {
