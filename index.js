@@ -33,11 +33,11 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "You didn't send a message." });
     }
 
-    // 1) Work out which business this chat is for
+    // 1) Figure out which business this chat belongs to (by slug)
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
 
     const businessResult = await pool.query(
-      "SELECT id, name FROM businesses WHERE slug = $1",
+      "SELECT id, name, slug FROM businesses WHERE slug = $1",
       [slug]
     );
 
@@ -53,37 +53,28 @@ app.post("/chat", async (req, res) => {
 
     const businessId = business.id;
 
-    // 2) Load that business's services from the database
+    // 2) Load this business's services so Zyra can match user text to real services
     const servicesResult = await pool.query(
-      `SELECT id, name, description, price_cents, duration_minutes
-       FROM services
-       WHERE business_id = $1 AND is_active = TRUE
-       ORDER BY id ASC`,
+      "SELECT id, name FROM services WHERE business_id = $1 AND is_active = TRUE",
       [businessId]
     );
 
     const services = servicesResult.rows;
 
-    // Build a human-readable list for the system prompt
-    const servicesText =
-      services.length > 0
-        ? services
-            .map((s) => {
-              const price =
-                s.price_cents != null
-                  ? `£${(s.price_cents / 100).toFixed(2)}`
-                  : "price not set";
-              const duration =
-                s.duration_minutes != null
-                  ? `${s.duration_minutes} mins`
-                  : "duration not set";
-              const desc = s.description ? ` — ${s.description}` : "";
-              return `- ${s.name}${desc} (${price}, ${duration})`;
-            })
-            .join("\n")
-        : "No services have been configured for this business.";
+    let servicesText;
+    if (services.length === 0) {
+      servicesText =
+        "This business has no services configured yet. If a user asks to book, politely explain that booking is not available yet.";
+    } else {
+      // Turn the services into a simple text list for the prompt
+      servicesText =
+        services
+          .map((s) => `- ${s.name}`)
+          .join("\n") +
+        "\n\nWhen you choose a service for a booking, you MUST set the service field to EXACTLY one of these names.";
+    }
 
-    // 3) Ask Zyra what to do, now with service awareness
+    // 3) Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -93,13 +84,13 @@ app.post("/chat", async (req, res) => {
 
 You are currently talking on behalf of this business:
 - Name: ${business.name}
-- Slug: ${slug}
+- Slug: ${business.slug}
 
 Here is the list of services this business offers. You MUST always choose the closest match from this list when creating a booking:
 
 ${servicesText}
 
-Service matching rules:
+Service matching rules (VERY IMPORTANT):
 - Always set the "service" field in the JSON to EXACTLY one of the service names from the list above.
 - If the user uses a slightly different phrase, pick the closest matching service.
   Examples for salons:
@@ -114,9 +105,37 @@ Your core responsibilities:
 3. For returning clients, allow fast, shorthand booking. If a user says something like "gel nails next Tuesday at 2pm, Sarah, 07123…", understand and process it.
 4. Always confirm missing REQUIRED details (name, service, date, time, phone). Do NOT block on optional notes.
 
-Important booking rules:
-- If the user has already clearly provided name, phone, service, date, and time in a SINGLE message, DO NOT ask any extra follow-up questions about preferences or notes. Assume notes can be an empty string ("") unless the user explicitly includes them.
-- If the date or time is written in natural language (for example: "next Tuesday", "tomorrow at 2pm", "this Friday morning"), DO NOT ask the user to clarify it into an exact calendar date. Just copy the phrase exactly as they wrote it into the "date" and "time" fields.
+IMPORTANT BOOKING BEHAVIOUR (OVERRIDES EVERYTHING ELSE):
+- If the user has already clearly provided name, phone, service, date, and time in a SINGLE message, you MUST immediately output booking JSON and NOTHING ELSE.
+  - Do NOT ask follow-up questions about:
+    - Clarifying the date or time (e.g. "next Thursday", "tomorrow at 2pm" is fine).
+    - Whether they want to add notes.
+    - Preferences or extra details.
+- If the date or time is written in natural language (for example: "next Thursday", "tomorrow at 2pm", "this Friday morning"), DO NOT ask the user to clarify it into an exact calendar date. Just copy the phrase exactly as they wrote it into the "date" and "time" fields.
+
+Concrete examples (you MUST follow this pattern):
+
+User: "Can I book a Hair Colour next Thursday at 1pm? Name is Chloe, phone 07123456789."
+Assistant (correct): 
+{
+  "name": "Chloe",
+  "phone": "07123456789",
+  "service": "Hair Colour",
+  "date": "next Thursday",
+  "time": "1pm",
+  "notes": ""
+}
+
+User: "Can I book a trim next Friday at 4pm? Name is Emma, phone 07900000000."
+Assistant (correct):
+{
+  "name": "Emma",
+  "phone": "07900000000",
+  "service": "Haircut",
+  "date": "next Friday",
+  "time": "4pm",
+  "notes": ""
+}
 
 When a booking is ready and fully confirmed:
 - Reply with ONLY a single JSON object.
