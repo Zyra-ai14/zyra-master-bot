@@ -25,29 +25,6 @@ const DEFAULT_BUSINESS_SLUG = "demo";
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
-// --- Helper functions --------------------------------------------------------
-
-async function getBusinessIdFromSlug(slug) {
-  const result = await pool.query(
-    "SELECT id FROM businesses WHERE slug = $1",
-    [slug]
-  );
-  return result.rows[0]?.id || null;
-}
-
-async function getServicesForBusiness(businessId) {
-  const result = await pool.query(
-    `SELECT id, name, description, price_cents, duration_minutes
-     FROM services
-     WHERE business_id = $1
-       AND is_active = true`,
-    [businessId]
-  );
-  return result.rows;
-}
-
-// --- Chat endpoint -----------------------------------------------------------
-
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
@@ -56,12 +33,17 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "You didn't send a message." });
     }
 
-    // 1) Figure out which business this chat belongs to (by slug)
+    // 1) Work out which business this chat is for
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
 
-    const businessId = await getBusinessIdFromSlug(slug);
+    const businessResult = await pool.query(
+      "SELECT id, name FROM businesses WHERE slug = $1",
+      [slug]
+    );
 
-    if (!businessId) {
+    const business = businessResult.rows[0];
+
+    if (!business) {
       console.error("No business found for slug:", slug);
       return res.json({
         reply:
@@ -69,22 +51,39 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // 2) Load available services for this business
-    const services = await getServicesForBusiness(businessId);
+    const businessId = business.id;
 
-    const serviceText =
+    // 2) Load that business's services from the database
+    const servicesResult = await pool.query(
+      `SELECT id, name, description, price_cents, duration_minutes
+       FROM services
+       WHERE business_id = $1 AND is_active = TRUE
+       ORDER BY id ASC`,
+      [businessId]
+    );
+
+    const services = servicesResult.rows;
+
+    // Build a human-readable list for the system prompt
+    const servicesText =
       services.length > 0
         ? services
-            .map(
-              (s) =>
-                `${s.name} — £${(s.price_cents / 100).toFixed(
-                  2
-                )}, ${s.duration_minutes} mins. ${s.description || ""}`
-            )
+            .map((s) => {
+              const price =
+                s.price_cents != null
+                  ? `£${(s.price_cents / 100).toFixed(2)}`
+                  : "price not set";
+              const duration =
+                s.duration_minutes != null
+                  ? `${s.duration_minutes} mins`
+                  : "duration not set";
+              const desc = s.description ? ` — ${s.description}` : "";
+              return `- ${s.name}${desc} (${price}, ${duration})`;
+            })
             .join("\n")
-        : "No services configured yet.";
+        : "No services have been configured for this business.";
 
-    // 3) Ask Zyra what to do
+    // 3) Ask Zyra what to do, now with service awareness
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -92,16 +91,22 @@ app.post("/chat", async (req, res) => {
           role: "system",
           content: `You are Zyra — an intelligent, friendly AI booking assistant used by service-based businesses.
 
-CONTEXT ABOUT THIS BUSINESS
-- The current business slug is: "${slug}".
-- These are the services available for this business (name — price, duration, description):
+You are currently talking on behalf of this business:
+- Name: ${business.name}
+- Slug: ${slug}
 
-${serviceText}
+Here is the list of services this business offers. You MUST always choose the closest match from this list when creating a booking:
 
-You must always try to match the user's request to ONE of the available service names above.
-- If the user is clearly asking for something that matches one of the names (even if they type it slightly differently, e.g. "biab refill" vs "BIAB Infill"), treat it as that service.
-- If the user asks for something that does NOT exist in the list, ask them to choose the closest option from the list.
-- Do not invent new services that are not listed.
+${servicesText}
+
+Service matching rules:
+- Always set the "service" field in the JSON to EXACTLY one of the service names from the list above.
+- If the user uses a slightly different phrase, pick the closest matching service.
+  Examples for salons:
+    - "trim", "just the ends", "hair cut" -> map to a Haircut-style service.
+    - "colour", "dye", "tint", "bleach" -> map to a Hair Colour-style service.
+    - "blowdry", "blow dry", "bouncy blow" -> map to a Blow Dry-style service.
+- If nothing is even roughly close, ask a short clarification question instead of guessing wildly.
 
 Your core responsibilities:
 1. Help clients understand available services, prices, and booking options.
@@ -121,7 +126,7 @@ When a booking is ready and fully confirmed:
 {
   "name": "<name>",
   "phone": "<phone>",
-  "service": "<service>",
+  "service": "<service>",   // must be EXACTLY one of this business's service names
   "date": "<date>",
   "time": "<time>",
   "notes": "<notes or empty string>"
