@@ -1,11 +1,23 @@
 import express from "express";
 import { OpenAI } from "openai";
 import pkg from "pg";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const { Pool } = pkg;
 
 const app = express();
 app.use(express.json());
+
+// --- Static files (so /demo-chat.html works) ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
+
+// Optional: visiting the base URL opens the demo page
+app.get("/", (req, res) => {
+  res.redirect("/demo-chat.html");
+});
 
 // OpenAI client
 const client = new OpenAI({
