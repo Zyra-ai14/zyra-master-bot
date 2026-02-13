@@ -9,15 +9,15 @@ const { Pool } = pkg;
 const app = express();
 app.use(express.json());
 
-// --- Static files (so /demo-chat.html works) ---
+// --- Fix: serve /public files (widget.js, demo-chat.html, etc.) ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Serve files directly (so /demo-chat.html works)
 app.use(express.static(path.join(__dirname, "public")));
 
-// Optional: visiting the base URL opens the demo page
-app.get("/", (req, res) => {
-  res.redirect("/demo-chat.html");
-});
+// Also serve under /public (so /public/widget.js works)
+app.use("/public", express.static(path.join(__dirname, "public")));
 
 // OpenAI client
 const client = new OpenAI({
@@ -37,28 +37,26 @@ const DEFAULT_BUSINESS_SLUG = "demo";
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
-// Helper: Fuzzy match a service from user text
+// Helper: Fuzzy match a service from user text (optional fallback)
 function findBestServiceMatch(userText, services) {
   if (!userText || services.length === 0) return null;
 
   const cleaned = userText.toLowerCase();
-
   let best = null;
   let bestScore = 0;
 
   for (const svc of services) {
-    const name = svc.name.toLowerCase();
+    const name = (svc.name || "").toLowerCase();
     let score = 0;
 
     if (cleaned.includes(name)) {
       score = 1.0;
     } else {
-      // Basic fuzzy: count matching characters in the same order
       let i = 0;
       for (const c of name) {
         if (cleaned.includes(c)) i++;
       }
-      score = i / name.length;
+      score = i / Math.max(name.length, 1);
     }
 
     if (score > bestScore) {
@@ -105,6 +103,15 @@ app.post("/chat", async (req, res) => {
 
     const services = servicesResult.rows;
 
+    const servicesText = services
+      .map(
+        (s) =>
+          `- ${s.name} (£${(s.price_cents / 100).toFixed(
+            2
+          )}, ${s.duration_minutes} mins)`
+      )
+      .join("\n");
+
     // Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -116,17 +123,10 @@ You are Zyra — the intelligent AI booking assistant for service-based business
 
 Here is the live list of services for this business:
 
-${services
-  .map(
-    (s) =>
-      `- ${s.name} (£${(s.price_cents / 100).toFixed(
-        2
-      )}, ${s.duration_minutes} mins)`
-  )
-  .join("\n")}
+${servicesText || "(No services found yet)"}
 
 Rules:
-1. You can answer questions about what services exist, prices, durations, and availability.
+1. You can answer questions about what services exist, prices, and durations.
 2. You MUST use the exact service names from the list above when confirming a booking.
 3. If a user misspells a service (e.g. "hair colur"), interpret it correctly.
 4. If the user clearly provides name, phone, service, date, and time in ONE message → return ONLY this JSON:
@@ -168,6 +168,12 @@ Rules:
       }
     } catch {
       booking = null;
+    }
+
+    // Optional fallback: if model returns near-match service in JSON, normalize it
+    if (booking && services.length > 0) {
+      const match = findBestServiceMatch(booking.service, services);
+      if (match) booking.service = match.name;
     }
 
     // If it's booking JSON → store it
