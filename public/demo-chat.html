@@ -1,1 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Zyra Demo Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      padding-top: 50px;
+    }
 
+    #chat-container {
+      width: 400px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #messages {
+      flex: 1;
+      padding: 15px;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      max-width: 80%;
+    }
+
+    .user {
+      background: #007bff;
+      color: white;
+      align-self: flex-end;
+    }
+
+    .bot {
+      background: #e9e9e9;
+      align-self: flex-start;
+    }
+
+    #input-area {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+
+    #input {
+      flex: 1;
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+    }
+
+    #send {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 0 20px;
+      cursor: pointer;
+    }
+
+    #send:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+<div id="chat-container">
+  <div id="messages"></div>
+
+  <div id="input-area">
+    <input id="input" placeholder="Type a message..." />
+    <button id="send">Send</button>
+  </div>
+</div>
+
+<script>
+  const messages = document.getElementById("messages");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+
+  const BUSINESS_SLUG = "zyra-test-salon"; // Change later for other businesses
+
+  function addMessage(text, sender) {
+    const div = document.createElement("div");
+    div.classList.add("message", sender);
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, "user");
+    input.value = "";
+
+    try {
+      const response = await fetch("https://zyra-master-bot-production.up.railway.app/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          businessSlug: BUSINESS_SLUG,
+          message: text
+        })
+      });
+
+      const data = await response.json();
+      addMessage(data.reply, "bot");
+    } catch (error) {
+      addMessage("Something went wrong.", "bot");
+    }
+  }
+
+  send.addEventListener("click", sendMessage);
+  input.addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
+      sendMessage();
+    }
+  });
+</script>
+
+</body>
+</html>
