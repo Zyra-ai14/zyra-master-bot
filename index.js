@@ -107,12 +107,40 @@ app.post("/chat", async (req, res) => {
 
     const services = servicesResult.rows;
 
+    // LOAD PROVIDERS + THEIR SERVICES  (NEW)
+    const providersResult = await pool.query(
+      `SELECT 
+         p.id,
+         p.name,
+         ARRAY_REMOVE(ARRAY_AGG(s.name), NULL) AS services
+       FROM providers p
+       LEFT JOIN provider_services ps ON ps.provider_id = p.id
+       LEFT JOIN services s ON s.id = ps.service_id
+       WHERE p.business_id = $1 AND p.is_active = TRUE
+       GROUP BY p.id, p.name
+       ORDER BY p.name`,
+      [businessId]
+    );
+
+    const providers = providersResult.rows;
+
     const servicesText = services
       .map(
         (s) =>
           `- ${s.name} (£${(s.price_cents / 100).toFixed(
             2
           )}, ${s.duration_minutes} mins)`
+      )
+      .join("\n");
+
+    const providersText = providers
+      .map(
+        (p) =>
+          `${p.name} offers: ${
+            p.services && p.services.length
+              ? p.services.join(", ")
+              : "No services assigned"
+          }`
       )
       .join("\n");
 
@@ -125,15 +153,20 @@ app.post("/chat", async (req, res) => {
           content: `
 You are Zyra — the intelligent AI booking assistant for service-based businesses.
 
-Here is the live list of services for this business:
+Here is the live list of services:
 
 ${servicesText || "(No services found yet)"}
 
+Here are the staff members:
+
+${providersText || "(No providers found yet)"}
+
 Rules:
-1. You can answer questions about what services exist, prices, and durations.
-2. You MUST use the exact service names from the list above when confirming a booking.
-3. If a user misspells a service (e.g. "hair colur"), interpret it correctly.
-4. If the user clearly provides name, phone, service, date, and time in ONE message → return ONLY this JSON:
+1. Users may ask for a specific staff member
+2. Users may ask "who does X service"
+3. Users may ask "book with Emma"
+4. You must respect which provider offers which services
+5. If a user provides name, phone, service, date and time → return ONLY JSON:
 
 {
   "name": "<name>",
@@ -144,8 +177,7 @@ Rules:
   "notes": "<notes or empty string>"
 }
 
-5. If you are NOT creating/updating a booking → respond normally in plain text (no JSON).
-6. Never ask a user to turn natural language dates into exact dates. Just copy what they wrote.
+Otherwise respond normally in plain text.
 `,
         },
         { role: "user", content: message },
@@ -174,17 +206,16 @@ Rules:
       booking = null;
     }
 
-    // Optional fallback: if model returns near-match service in JSON, normalize it
+    // Optional fallback: normalize service
     if (booking && services.length > 0) {
       const match = findBestServiceMatch(booking.service, services);
       if (match) booking.service = match.name;
     }
 
-    // If it's booking JSON → store it
+    // If booking
     if (booking) {
       const notes = booking.notes || "";
 
-      // Insert client
       const clientResult = await pool.query(
         `INSERT INTO clients (business_id, name, phone, notes)
          VALUES ($1, $2, $3, $4)
@@ -194,7 +225,6 @@ Rules:
 
       const clientId = clientResult.rows[0].id;
 
-      // Insert booking
       await pool.query(
         `INSERT INTO bookings (business_id, client_id, service, date, time, notes)
          VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -208,7 +238,6 @@ Rules:
         ]
       );
 
-      // Call external microservice
       try {
         await fetch(BOOKING_API_URL, {
           method: "POST",
@@ -220,11 +249,10 @@ Rules:
       }
 
       return res.json({
-        reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}. If anything is wrong, reply here and I'll adjust it.`,
+        reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}.`,
       });
     }
 
-    // Otherwise → normal text reply
     return res.json({ reply: aiReply });
   } catch (err) {
     console.error("Chat endpoint error:", err);
