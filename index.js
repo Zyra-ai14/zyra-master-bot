@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { OpenAI } from "openai";
 import pkg from "pg";
 import path from "path";
@@ -7,9 +8,12 @@ import { fileURLToPath } from "url";
 const { Pool } = pkg;
 
 const app = express();
+
+// Enable CORS so local test pages / external websites can call /chat
+app.use(cors());
 app.use(express.json());
 
-// --- Fix: serve /public files (widget.js, demo-chat.html, etc.) ---
+// --- Serve /public files (widget.js, demo-chat.html, etc.) ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -37,7 +41,7 @@ const DEFAULT_BUSINESS_SLUG = "demo";
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
-// Helper: Fuzzy match a service from user text (optional fallback)
+// Helper: Fuzzy match a service from user text
 function findBestServiceMatch(userText, services) {
   if (!userText || services.length === 0) return null;
 
