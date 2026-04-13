@@ -235,9 +235,27 @@ Otherwise respond normally in plain text.
     if (booking) {
       const notes = booking.notes || "";
 
-      // Detect provider from the original user message
+      // First try to detect provider from user's message
       const providerMatch = findProviderFromText(message, providers);
-      const providerId = providerMatch ? providerMatch.id : null;
+
+      let providerId = providerMatch ? providerMatch.id : null;
+
+      // If no provider explicitly mentioned, assign the first provider who offers the booked service
+      if (!providerId) {
+        const providerResult = await pool.query(
+          `SELECT p.id
+           FROM providers p
+           JOIN provider_services ps ON ps.provider_id = p.id
+           JOIN services s ON s.id = ps.service_id
+           WHERE p.business_id = $1
+           AND p.is_active = TRUE
+           AND s.name = $2
+           LIMIT 1`,
+          [businessId, booking.service]
+        );
+
+        providerId = providerResult.rows[0]?.id || null;
+      }
 
       const clientResult = await pool.query(
         `INSERT INTO clients (business_id, name, phone, notes)
