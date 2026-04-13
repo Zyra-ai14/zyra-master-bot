@@ -290,8 +290,20 @@ Otherwise respond normally in plain text.
         console.error("Error calling Booking API:", apiError);
       }
 
+      const providerName = providerMatch ? providerMatch.name : null;
+
+      const dateText =
+        booking.date.toLowerCase() === "tomorrow" ||
+        booking.date.toLowerCase().startsWith("next ")
+          ? `${booking.date} at ${booking.time}`
+          : `on ${booking.date} at ${booking.time}`;
+
+      const replyText = providerName
+        ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}.`
+        : `You're booked for ${booking.service} ${dateText} under ${booking.name}.`;
+
       return res.json({
-        reply: `You're booked for ${booking.service} on ${booking.date} at ${booking.time} under ${booking.name}.`,
+        reply: replyText,
       });
     }
 
