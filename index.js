@@ -72,6 +72,21 @@ function findBestServiceMatch(userText, services) {
   return bestScore >= 0.45 ? best : null;
 }
 
+// Helper: detect provider from user text
+function findProviderFromText(userText, providers) {
+  if (!userText) return null;
+
+  const cleaned = userText.toLowerCase();
+
+  for (const p of providers) {
+    if (cleaned.includes(p.name.toLowerCase())) {
+      return p;
+    }
+  }
+
+  return null;
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
@@ -107,7 +122,7 @@ app.post("/chat", async (req, res) => {
 
     const services = servicesResult.rows;
 
-    // LOAD PROVIDERS + THEIR SERVICES  (NEW)
+    // Load providers + their services
     const providersResult = await pool.query(
       `SELECT 
          p.id,
@@ -162,11 +177,15 @@ Here are the staff members:
 ${providersText || "(No providers found yet)"}
 
 Rules:
-1. Users may ask for a specific staff member
-2. Users may ask "who does X service"
-3. Users may ask "book with Emma"
-4. You must respect which provider offers which services
-5. If a user provides name, phone, service, date and time → return ONLY JSON:
+1. Users may ask for a specific staff member.
+2. Users may ask "who does X service".
+3. Users may ask "book with Emma".
+4. You must respect which provider offers which services.
+5. If a user provides name, phone, service, date and time, return ONLY JSON.
+6. If the user mentions a provider, put that provider name into the notes field exactly like this: "provider: Emma"
+7. If no provider is mentioned, leave notes empty unless the user adds other notes.
+
+Return booking JSON like this:
 
 {
   "name": "<name>",
@@ -216,6 +235,10 @@ Otherwise respond normally in plain text.
     if (booking) {
       const notes = booking.notes || "";
 
+      // Detect provider from the original user message
+      const providerMatch = findProviderFromText(message, providers);
+      const providerId = providerMatch ? providerMatch.id : null;
+
       const clientResult = await pool.query(
         `INSERT INTO clients (business_id, name, phone, notes)
          VALUES ($1, $2, $3, $4)
@@ -226,11 +249,12 @@ Otherwise respond normally in plain text.
       const clientId = clientResult.rows[0].id;
 
       await pool.query(
-        `INSERT INTO bookings (business_id, client_id, service, date, time, notes)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO bookings (business_id, client_id, provider_id, service, date, time, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           businessId,
           clientId,
+          providerId,
           booking.service,
           booking.date,
           booking.time,
