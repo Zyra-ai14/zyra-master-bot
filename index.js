@@ -76,13 +76,11 @@ function findProviderFromText(userText, providers) {
   return null;
 }
 
-// Convert common user times into HH:MM 24-hour format
 function normalizeTimeInput(timeText) {
   if (!timeText || typeof timeText !== "string") return null;
 
   const raw = timeText.trim().toLowerCase();
 
-  // 15:00 or 9:30
   let match = raw.match(/^(\d{1,2}):(\d{2})$/);
   if (match) {
     const hour = Number(match[1]);
@@ -92,7 +90,6 @@ function normalizeTimeInput(timeText) {
     }
   }
 
-  // 3pm / 3 pm / 3:30pm / 3:30 pm
   match = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
   if (match) {
     let hour = Number(match[1]);
@@ -110,7 +107,6 @@ function normalizeTimeInput(timeText) {
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   }
 
-  // 1500
   match = raw.match(/^(\d{2})(\d{2})$/);
   if (match) {
     const hour = Number(match[1]);
@@ -121,6 +117,26 @@ function normalizeTimeInput(timeText) {
   }
 
   return null;
+}
+
+function formatTimeForHumans(normalizedTime) {
+  if (!normalizedTime || typeof normalizedTime !== "string") return normalizedTime;
+
+  const match = normalizedTime.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return normalizedTime;
+
+  let hour = Number(match[1]);
+  const minute = match[2];
+
+  const meridiem = hour >= 12 ? "pm" : "am";
+  hour = hour % 12;
+  if (hour === 0) hour = 12;
+
+  if (minute === "00") {
+    return `${hour}${meridiem}`;
+  }
+
+  return `${hour}:${minute}${meridiem}`;
 }
 
 app.post("/chat", async (req, res) => {
@@ -309,7 +325,7 @@ Otherwise respond normally in plain text.
         if (existingBookingResult.rows.length > 0) {
           const providerName = providerMatch ? providerMatch.name : "This staff member";
           return res.json({
-            reply: `${providerName} is already booked at ${booking.time}. Would you like another time?`,
+            reply: `${providerName} is already booked at ${formatTimeForHumans(normalizedTime)}. Would you like another time?`,
           });
         }
       }
@@ -351,12 +367,13 @@ Otherwise respond normally in plain text.
       }
 
       const providerName = providerMatch ? providerMatch.name : null;
+      const humanTime = formatTimeForHumans(normalizedTime);
 
       const dateText =
         booking.date.toLowerCase() === "tomorrow" ||
         booking.date.toLowerCase().startsWith("next ")
-          ? `${booking.date} at ${normalizedTime}`
-          : `on ${booking.date} at ${normalizedTime}`;
+          ? `${booking.date} at ${humanTime}`
+          : `on ${booking.date} at ${humanTime}`;
 
       const replyText = providerName
         ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}.`
