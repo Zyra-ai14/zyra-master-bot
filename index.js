@@ -32,6 +32,32 @@ const DEFAULT_BUSINESS_SLUG = "demo";
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
+// Temporary in-memory pending bookings
+// Keyed by business slug + user IP
+const pendingBookings = new Map();
+const PENDING_BOOKING_TTL_MS = 15 * 60 * 1000;
+
+function getPendingBookingKey(req, slug) {
+  const ip =
+    req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
+    req.ip ||
+    "unknown";
+  return `${slug}::${ip}`;
+}
+
+function cleanupPendingBooking(key) {
+  const pending = pendingBookings.get(key);
+  if (!pending) return null;
+
+  const age = Date.now() - pending.createdAt;
+  if (age > PENDING_BOOKING_TTL_MS) {
+    pendingBookings.delete(key);
+    return null;
+  }
+
+  return pending;
+}
+
 function findBestServiceMatch(userText, services) {
   if (!userText || services.length === 0) return null;
 
@@ -86,7 +112,10 @@ function normalizeTimeInput(timeText) {
     const hour = Number(match[1]);
     const minute = Number(match[2]);
     if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+        2,
+        "0"
+      )}`;
     }
   }
 
@@ -104,7 +133,10 @@ function normalizeTimeInput(timeText) {
       if (hour !== 12) hour += 12;
     }
 
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}`;
   }
 
   match = raw.match(/^(\d{2})(\d{2})$/);
@@ -112,7 +144,10 @@ function normalizeTimeInput(timeText) {
     const hour = Number(match[1]);
     const minute = Number(match[2]);
     if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+        2,
+        "0"
+      )}`;
     }
   }
 
@@ -186,6 +221,7 @@ app.post("/chat", async (req, res) => {
     }
 
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
+    const pendingKey = getPendingBookingKey(req, slug);
 
     const businessResult = await pool.query(
       "SELECT id, name FROM businesses WHERE slug = $1",
@@ -226,32 +262,48 @@ app.post("/chat", async (req, res) => {
 
     const providers = providersResult.rows;
 
-    const servicesText = services
-      .map(
-        (s) =>
-          `- ${s.name} (£${(s.price_cents / 100).toFixed(
-            2
-          )}, ${s.duration_minutes} mins)`
-      )
-      .join("\n");
+    let booking = null;
 
-    const providersText = providers
-      .map(
-        (p) =>
-          `${p.name} offers: ${
-            p.services && p.services.length
-              ? p.services.join(", ")
-              : "No services assigned"
-          }`
-      )
-      .join("\n");
+    // First: see if the user is replying with just a new time to a pending conflict
+    const pending = cleanupPendingBooking(pendingKey);
+    const possibleTime = normalizeTimeInput(message);
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        {
-          role: "system",
-          content: `
+    if (pending && possibleTime) {
+      booking = {
+        name: pending.name,
+        phone: pending.phone,
+        service: pending.service,
+        date: pending.date,
+        time: possibleTime,
+        notes: pending.notes || "",
+      };
+    } else {
+      const servicesText = services
+        .map(
+          (s) =>
+            `- ${s.name} (£${(s.price_cents / 100).toFixed(
+              2
+            )}, ${s.duration_minutes} mins)`
+        )
+        .join("\n");
+
+      const providersText = providers
+        .map(
+          (p) =>
+            `${p.name} offers: ${
+              p.services && p.services.length
+                ? p.services.join(", ")
+                : "No services assigned"
+            }`
+        )
+        .join("\n");
+
+      const completion = await client.chat.completions.create({
+        model: "gpt-4.1-mini",
+        messages: [
+          {
+            role: "system",
+            content: `
 You are Zyra — the intelligent AI booking assistant for service-based businesses.
 
 Here is the live list of services:
@@ -287,30 +339,33 @@ Return booking JSON like this:
 
 Otherwise respond normally in plain text.
 `,
-        },
-        { role: "user", content: message },
-      ],
-    });
+          },
+          { role: "user", content: message },
+        ],
+      });
 
-    let aiReply = completion.choices[0]?.message?.content?.trim() || "";
+      const aiReply = completion.choices[0]?.message?.content?.trim() || "";
 
-    let booking = null;
-
-    try {
-      const parsed = JSON.parse(aiReply);
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        parsed.name &&
-        parsed.phone &&
-        parsed.service &&
-        parsed.date &&
-        parsed.time
-      ) {
-        booking = parsed;
+      try {
+        const parsed = JSON.parse(aiReply);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          parsed.name &&
+          parsed.phone &&
+          parsed.service &&
+          parsed.date &&
+          parsed.time
+        ) {
+          booking = parsed;
+        }
+      } catch {
+        booking = null;
       }
-    } catch {
-      booking = null;
+
+      if (!booking) {
+        return res.json({ reply: aiReply });
+      }
     }
 
     if (booking && services.length > 0) {
@@ -321,7 +376,9 @@ Otherwise respond normally in plain text.
     if (booking) {
       const notes = booking.notes || "";
 
-      const providerMatch = findProviderFromText(message, providers);
+      const providerMatch = pending
+        ? providers.find((p) => p.id === pending.providerId) || null
+        : findProviderFromText(message, providers);
 
       let providerId = providerMatch ? providerMatch.id : null;
 
@@ -348,7 +405,8 @@ Otherwise respond normally in plain text.
 
       if (!normalizedTime) {
         return res.json({
-          reply: "I couldn't understand that time. Please use something like 3pm or 15:00.",
+          reply:
+            "I couldn't understand that time. Please use something like 3pm or 15:00.",
         });
       }
 
@@ -375,6 +433,17 @@ Otherwise respond normally in plain text.
 
           const bookedTimes = bookedTimesResult.rows.map((r) => r.time);
           const suggestions = getNextAvailableTimes(bookedTimes, normalizedTime);
+
+          // Store pending booking so the user can reply with just "8pm"
+          pendingBookings.set(pendingKey, {
+            createdAt: Date.now(),
+            name: booking.name,
+            phone: booking.phone,
+            service: booking.service,
+            date: booking.date,
+            notes,
+            providerId,
+          });
 
           const suggestionText = suggestions.length
             ? `${assignedProvider?.name || "They"}'s available at ${suggestions
@@ -413,6 +482,9 @@ Otherwise respond normally in plain text.
         ]
       );
 
+      // Booking succeeded — clear any pending conflict flow
+      pendingBookings.delete(pendingKey);
+
       try {
         await fetch(BOOKING_API_URL, {
           method: "POST",
@@ -444,7 +516,7 @@ Otherwise respond normally in plain text.
       });
     }
 
-    return res.json({ reply: aiReply });
+    return res.json({ reply: "Something went wrong on my side. Please try again." });
   } catch (err) {
     console.error("Chat endpoint error:", err);
     return res.status(500).json({
