@@ -260,6 +260,26 @@ Otherwise respond normally in plain text.
         providerId = providerResult.rows[0]?.id || null;
       }
 
+      // Double-booking prevention
+      if (providerId) {
+        const existingBookingResult = await pool.query(
+          `SELECT id
+           FROM bookings
+           WHERE provider_id = $1
+           AND date = $2
+           AND time = $3
+           LIMIT 1`,
+          [providerId, booking.date, booking.time]
+        );
+
+        if (existingBookingResult.rows.length > 0) {
+          const providerName = providerMatch ? providerMatch.name : "This staff member";
+          return res.json({
+            reply: `${providerName} is already booked at ${booking.time}. Would you like another time?`,
+          });
+        }
+      }
+
       const clientResult = await pool.query(
         `INSERT INTO clients (business_id, name, phone, notes)
          VALUES ($1, $2, $3, $4)
