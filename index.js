@@ -264,7 +264,6 @@ app.post("/chat", async (req, res) => {
 
     let booking = null;
 
-    // First: see if the user is replying with just a new time to a pending conflict
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = normalizeTimeInput(message);
 
@@ -434,7 +433,6 @@ Otherwise respond normally in plain text.
           const bookedTimes = bookedTimesResult.rows.map((r) => r.time);
           const suggestions = getNextAvailableTimes(bookedTimes, normalizedTime);
 
-          // Store pending booking so the user can reply with just "8pm"
           pendingBookings.set(pendingKey, {
             createdAt: Date.now(),
             name: booking.name,
@@ -459,14 +457,25 @@ Otherwise respond normally in plain text.
         }
       }
 
-      const clientResult = await pool.query(
-        `INSERT INTO clients (business_id, name, phone, notes)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id`,
-        [businessId, booking.name, booking.phone, notes]
+      let clientId;
+
+      const existingClient = await pool.query(
+        `SELECT id FROM clients WHERE business_id = $1 AND phone = $2 LIMIT 1`,
+        [businessId, booking.phone]
       );
 
-      const clientId = clientResult.rows[0].id;
+      if (existingClient.rows.length > 0) {
+        clientId = existingClient.rows[0].id;
+      } else {
+        const clientResult = await pool.query(
+          `INSERT INTO clients (business_id, name, phone, notes)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [businessId, booking.name, booking.phone, notes]
+        );
+
+        clientId = clientResult.rows[0].id;
+      }
 
       await pool.query(
         `INSERT INTO bookings (business_id, client_id, provider_id, service, date, time, notes)
@@ -482,7 +491,6 @@ Otherwise respond normally in plain text.
         ]
       );
 
-      // Booking succeeded — clear any pending conflict flow
       pendingBookings.delete(pendingKey);
 
       try {
