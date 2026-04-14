@@ -9,39 +9,29 @@ const { Pool } = pkg;
 
 const app = express();
 
-// Enable CORS so local test pages / external websites can call /chat
 app.use(cors());
 app.use(express.json());
 
-// --- Serve /public files (widget.js, demo-chat.html, etc.) ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Serve files directly (so /demo-chat.html works)
 app.use(express.static(path.join(__dirname, "public")));
-
-// Also serve under /public (so /public/widget.js works)
 app.use("/public", express.static(path.join(__dirname, "public")));
 
-// OpenAI client
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Postgres connection (Railway DATABASE_URL)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-// Default business slug
 const DEFAULT_BUSINESS_SLUG = "demo";
 
-// External booking microservice
 const BOOKING_API_URL =
   "https://function-bun-production-7b13.up.railway.app/api/book";
 
-// Helper: Fuzzy match a service from user text
 function findBestServiceMatch(userText, services) {
   if (!userText || services.length === 0) return null;
 
@@ -72,7 +62,6 @@ function findBestServiceMatch(userText, services) {
   return bestScore >= 0.45 ? best : null;
 }
 
-// Helper: detect provider from user text
 function findProviderFromText(userText, providers) {
   if (!userText) return null;
 
@@ -87,6 +76,53 @@ function findProviderFromText(userText, providers) {
   return null;
 }
 
+// Convert common user times into HH:MM 24-hour format
+function normalizeTimeInput(timeText) {
+  if (!timeText || typeof timeText !== "string") return null;
+
+  const raw = timeText.trim().toLowerCase();
+
+  // 15:00 or 9:30
+  let match = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (match) {
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+  }
+
+  // 3pm / 3 pm / 3:30pm / 3:30 pm
+  match = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (match) {
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || "00");
+    const meridiem = match[3];
+
+    if (hour < 1 || hour > 12 || minute < 0 || minute > 59) return null;
+
+    if (meridiem === "am") {
+      if (hour === 12) hour = 0;
+    } else {
+      if (hour !== 12) hour += 12;
+    }
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  // 1500
+  match = raw.match(/^(\d{2})(\d{2})$/);
+  if (match) {
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
@@ -95,7 +131,6 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "You didn't send a message." });
     }
 
-    // Determine business
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
 
     const businessResult = await pool.query(
@@ -114,7 +149,6 @@ app.post("/chat", async (req, res) => {
 
     const businessId = business.id;
 
-    // Load services for that business
     const servicesResult = await pool.query(
       "SELECT id, name, description, price_cents, duration_minutes FROM services WHERE business_id = $1 AND is_active = TRUE",
       [businessId]
@@ -122,7 +156,6 @@ app.post("/chat", async (req, res) => {
 
     const services = servicesResult.rows;
 
-    // Load providers + their services
     const providersResult = await pool.query(
       `SELECT 
          p.id,
@@ -159,7 +192,6 @@ app.post("/chat", async (req, res) => {
       )
       .join("\n");
 
-    // Ask Zyra what to do
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -208,7 +240,6 @@ Otherwise respond normally in plain text.
 
     let aiReply = completion.choices[0]?.message?.content?.trim() || "";
 
-    // Try to parse booking JSON
     let booking = null;
 
     try {
@@ -228,22 +259,18 @@ Otherwise respond normally in plain text.
       booking = null;
     }
 
-    // Optional fallback: normalize service
     if (booking && services.length > 0) {
       const match = findBestServiceMatch(booking.service, services);
       if (match) booking.service = match.name;
     }
 
-    // If booking
     if (booking) {
       const notes = booking.notes || "";
 
-      // First try to detect provider from user's message
       const providerMatch = findProviderFromText(message, providers);
 
       let providerId = providerMatch ? providerMatch.id : null;
 
-      // If no provider explicitly mentioned, assign the first provider who offers the booked service
       if (!providerId) {
         const providerResult = await pool.query(
           `SELECT p.id
@@ -260,7 +287,14 @@ Otherwise respond normally in plain text.
         providerId = providerResult.rows[0]?.id || null;
       }
 
-      // Double-booking prevention
+      const normalizedTime = normalizeTimeInput(booking.time);
+
+      if (!normalizedTime) {
+        return res.json({
+          reply: "I couldn't understand that time. Please use something like 3pm or 15:00.",
+        });
+      }
+
       if (providerId) {
         const existingBookingResult = await pool.query(
           `SELECT id
@@ -269,7 +303,7 @@ Otherwise respond normally in plain text.
            AND date = $2
            AND time = $3
            LIMIT 1`,
-          [providerId, booking.date, booking.time]
+          [providerId, booking.date, normalizedTime]
         );
 
         if (existingBookingResult.rows.length > 0) {
@@ -298,7 +332,7 @@ Otherwise respond normally in plain text.
           providerId,
           booking.service,
           booking.date,
-          booking.time,
+          normalizedTime,
           notes,
         ]
       );
@@ -307,7 +341,10 @@ Otherwise respond normally in plain text.
         await fetch(BOOKING_API_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(booking),
+          body: JSON.stringify({
+            ...booking,
+            time: normalizedTime,
+          }),
         });
       } catch (apiError) {
         console.error("Error calling Booking API:", apiError);
@@ -318,8 +355,8 @@ Otherwise respond normally in plain text.
       const dateText =
         booking.date.toLowerCase() === "tomorrow" ||
         booking.date.toLowerCase().startsWith("next ")
-          ? `${booking.date} at ${booking.time}`
-          : `on ${booking.date} at ${booking.time}`;
+          ? `${booking.date} at ${normalizedTime}`
+          : `on ${booking.date} at ${normalizedTime}`;
 
       const replyText = providerName
         ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}.`
