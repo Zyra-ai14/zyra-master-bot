@@ -139,6 +139,44 @@ function formatTimeForHumans(normalizedTime) {
   return `${hour}:${minute}${meridiem}`;
 }
 
+function getNextAvailableTimes(bookedTimes, requestedTime) {
+  const allSlots = [
+    "09:00",
+    "10:00",
+    "11:00",
+    "12:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+    "18:00",
+    "19:00",
+    "20:00",
+  ];
+
+  const requestedIndex = allSlots.indexOf(requestedTime);
+  if (requestedIndex === -1) return [];
+
+  const suggestions = [];
+
+  for (let i = requestedIndex - 1; i >= 0; i--) {
+    if (!bookedTimes.includes(allSlots[i])) {
+      suggestions.push(allSlots[i]);
+      break;
+    }
+  }
+
+  for (let i = requestedIndex + 1; i < allSlots.length; i++) {
+    if (!bookedTimes.includes(allSlots[i])) {
+      suggestions.push(allSlots[i]);
+      break;
+    }
+  }
+
+  return suggestions;
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
@@ -303,6 +341,9 @@ Otherwise respond normally in plain text.
         providerId = providerResult.rows[0]?.id || null;
       }
 
+      const assignedProvider =
+        providers.find((p) => p.id === providerId) || providerMatch || null;
+
       const normalizedTime = normalizeTimeInput(booking.time);
 
       if (!normalizedTime) {
@@ -323,9 +364,28 @@ Otherwise respond normally in plain text.
         );
 
         if (existingBookingResult.rows.length > 0) {
-          const providerName = providerMatch ? providerMatch.name : "This staff member";
+          const bookedTimesResult = await pool.query(
+            `SELECT time
+             FROM bookings
+             WHERE business_id = $1
+             AND provider_id = $2
+             AND date = $3`,
+            [businessId, providerId, booking.date]
+          );
+
+          const bookedTimes = bookedTimesResult.rows.map((r) => r.time);
+          const suggestions = getNextAvailableTimes(bookedTimes, normalizedTime);
+
+          const suggestionText = suggestions.length
+            ? `${assignedProvider?.name || "They"}'s available at ${suggestions
+                .map(formatTimeForHumans)
+                .join(" or ")}.`
+            : "No nearby slots available.";
+
           return res.json({
-            reply: `${providerName} is already booked at ${formatTimeForHumans(normalizedTime)}. Would you like another time?`,
+            reply: `${assignedProvider?.name || "This staff member"} is already booked at ${formatTimeForHumans(
+              normalizedTime
+            )}. ${suggestionText} Would you like to book one of those?`,
           });
         }
       }
@@ -366,7 +426,7 @@ Otherwise respond normally in plain text.
         console.error("Error calling Booking API:", apiError);
       }
 
-      const providerName = providerMatch ? providerMatch.name : null;
+      const providerName = assignedProvider ? assignedProvider.name : null;
       const humanTime = formatTimeForHumans(normalizedTime);
 
       const dateText =
