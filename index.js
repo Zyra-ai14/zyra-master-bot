@@ -377,7 +377,9 @@ Rules:
 11. If a known returning client is shown above and the phone number matches, you may use their stored name even if the user does not type their name again.
 12. If the user gives phone + service + date + time, that is enough for a booking when the known returning client is available above.
 13. If the user does not specify a provider, you may still return booking JSON. Do not ask for a provider unless the user explicitly asks for a specific staff member or asks who does a service.
-14. If the user says "same", "same as last time", or similar, use the last booking details above.
+14. If the user says "same", "same as last time", or similar:
+- If a last booking exists, use it.
+- If no last booking is available, ask for their phone number to retrieve it.
 15. If the user says "same" but does NOT include a new time or date, ask for confirmation before booking.
 
 Return booking JSON like this:
