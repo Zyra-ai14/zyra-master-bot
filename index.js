@@ -263,6 +263,26 @@ app.post("/chat", async (req, res) => {
     const providers = providersResult.rows;
 
     let booking = null;
+    let knownClient = null;
+
+    // Detect returning customer by phone number in the message
+    const phoneMatch = message.match(/\b0\d{10,14}\b/);
+
+    if (phoneMatch) {
+      const phoneFromMessage = phoneMatch[0];
+
+      const knownClientResult = await pool.query(
+        `SELECT id, name, phone
+         FROM clients
+         WHERE business_id = $1 AND phone = $2
+         LIMIT 1`,
+        [businessId, phoneFromMessage]
+      );
+
+      if (knownClientResult.rows.length > 0) {
+        knownClient = knownClientResult.rows[0];
+      }
+    }
 
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = normalizeTimeInput(message);
@@ -350,7 +370,6 @@ Otherwise respond normally in plain text.
         if (
           parsed &&
           typeof parsed === "object" &&
-          parsed.name &&
           parsed.phone &&
           parsed.service &&
           parsed.date &&
@@ -365,6 +384,11 @@ Otherwise respond normally in plain text.
       if (!booking) {
         return res.json({ reply: aiReply });
       }
+    }
+
+    // If returning client, auto-fill name when it is missing
+    if (knownClient && booking && !booking.name) {
+      booking.name = knownClient.name;
     }
 
     if (booking && services.length > 0) {
