@@ -554,8 +554,8 @@ Otherwise respond normally in plain text.
           : `on ${booking.date} at ${humanTime}`;
 
       const replyText = providerName
-        ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}.`
-        : `You're booked for ${booking.service} ${dateText} under ${booking.name}.`;
+        ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}. Let me know if you'd like to change anything.`
+        : `You're booked for ${booking.service} ${dateText} under ${booking.name}. Let me know if you'd like to change anything.`;
 
       return res.json({
         reply: replyText,
