@@ -396,8 +396,12 @@ Otherwise respond normally in plain text.
       }
     }
 
-    // If returning client, auto-fill name when it is missing
-    if (knownClient && booking && !booking.name) {
+    // Force correct stored name for returning clients
+    if (
+      knownClient &&
+      booking &&
+      (!booking.name || booking.name.toLowerCase() === "new client")
+    ) {
       booking.name = knownClient.name;
     }
 
