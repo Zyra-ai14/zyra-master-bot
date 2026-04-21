@@ -333,6 +333,13 @@ Here are the staff members:
 
 ${providersText || "(No providers found yet)"}
 
+Known returning client:
+${
+  knownClient
+    ? `Name: ${knownClient.name}, Phone: ${knownClient.phone}`
+    : "None"
+}
+
 Rules:
 1. Users may ask for a specific staff member.
 2. Users may ask "who does X service".
@@ -344,6 +351,9 @@ Rules:
 8. If a user provides enough booking details to create a booking, return ONLY JSON.
 9. If the user mentions a provider, put that provider name into the notes field exactly like this: "provider: Emma"
 10. If the user asks for any provider or next available without naming someone, leave notes empty unless the user adds other notes.
+11. If a known returning client is shown above and the phone number matches, you may use their stored name even if the user does not type their name again.
+12. If the user gives phone + service + date + time, that is enough for a booking when the known returning client is available above.
+13. If the user does not specify a provider, you may still return booking JSON. Do not ask for a provider unless the user explicitly asks for a specific staff member or asks who does a service.
 
 Return booking JSON like this:
 
