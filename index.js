@@ -264,6 +264,7 @@ app.post("/chat", async (req, res) => {
 
     let booking = null;
     let knownClient = null;
+    let lastBooking = null;
 
     // Detect returning customer by phone number in the message
     const phoneMatch = message.match(/\b0\d{10,14}\b/);
@@ -281,6 +282,21 @@ app.post("/chat", async (req, res) => {
 
       if (knownClientResult.rows.length > 0) {
         knownClient = knownClientResult.rows[0];
+      }
+    }
+
+    if (knownClient) {
+      const lastBookingResult = await pool.query(
+        `SELECT service, provider_id
+         FROM bookings
+         WHERE client_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [knownClient.id]
+      );
+
+      if (lastBookingResult.rows.length > 0) {
+        lastBooking = lastBookingResult.rows[0];
       }
     }
 
@@ -340,6 +356,13 @@ ${
     : "None"
 }
 
+Last booking:
+${
+  lastBooking
+    ? `Service: ${lastBooking.service}, Provider ID: ${lastBooking.provider_id}`
+    : "None"
+}
+
 Rules:
 1. Users may ask for a specific staff member.
 2. Users may ask "who does X service".
@@ -354,6 +377,7 @@ Rules:
 11. If a known returning client is shown above and the phone number matches, you may use their stored name even if the user does not type their name again.
 12. If the user gives phone + service + date + time, that is enough for a booking when the known returning client is available above.
 13. If the user does not specify a provider, you may still return booking JSON. Do not ask for a provider unless the user explicitly asks for a specific staff member or asks who does a service.
+14. If the user says "same", "same as last time", or similar, use the last booking details above.
 
 Return booking JSON like this:
 
