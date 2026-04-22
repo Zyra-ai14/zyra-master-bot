@@ -419,6 +419,18 @@ Otherwise respond normally in plain text.
       }
 
       if (!booking) {
+        const isOnlyPhone = /^0\d{10,14}$/.test(message.trim());
+
+        if (isOnlyPhone && knownClient && lastBooking) {
+          const providerName =
+            providers.find((p) => p.id === lastBooking.provider_id)?.name ||
+            "your usual stylist";
+
+          return res.json({
+            reply: `Welcome back ${knownClient.name} — would you like to book ${lastBooking.service} with ${providerName} again?`,
+          });
+        }
+
         return res.json({ reply: aiReply });
       }
     }
