@@ -37,6 +37,11 @@ const BOOKING_API_URL =
 const pendingBookings = new Map();
 const PENDING_BOOKING_TTL_MS = 15 * 60 * 1000;
 
+// Temporary in-memory session memory
+// Keyed by business slug + user IP
+const sessionMemory = new Map();
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
 function getPendingBookingKey(req, slug) {
   const ip =
     req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
@@ -56,6 +61,29 @@ function cleanupPendingBooking(key) {
   }
 
   return pending;
+}
+
+function getSessionMemory(key) {
+  const session = sessionMemory.get(key);
+  if (!session) return null;
+
+  const age = Date.now() - session.createdAt;
+  if (age > SESSION_TTL_MS) {
+    sessionMemory.delete(key);
+    return null;
+  }
+
+  return session;
+}
+
+function setSessionMemory(key, data) {
+  const existing = getSessionMemory(key) || {};
+
+  sessionMemory.set(key, {
+    ...existing,
+    ...data,
+    createdAt: Date.now(),
+  });
 }
 
 function findBestServiceMatch(userText, services) {
@@ -222,6 +250,7 @@ app.post("/chat", async (req, res) => {
 
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
     const pendingKey = getPendingBookingKey(req, slug);
+    const session = getSessionMemory(pendingKey);
 
     const businessResult = await pool.query(
       "SELECT id, name FROM businesses WHERE slug = $1",
@@ -266,22 +295,32 @@ app.post("/chat", async (req, res) => {
     let knownClient = null;
     let lastBooking = null;
 
-    // Detect returning customer by phone number in the message
+    // Detect returning customer by phone number in the message or session
     const phoneMatch = message.match(/\b0\d{10,14}\b/);
+    let phoneToUse = null;
 
     if (phoneMatch) {
-      const phoneFromMessage = phoneMatch[0];
+      phoneToUse = phoneMatch[0];
+      setSessionMemory(pendingKey, { phone: phoneToUse });
+    } else if (session?.phone) {
+      phoneToUse = session.phone;
+    }
 
+    if (phoneToUse) {
       const knownClientResult = await pool.query(
         `SELECT id, name, phone
          FROM clients
          WHERE business_id = $1 AND phone = $2
          LIMIT 1`,
-        [businessId, phoneFromMessage]
+        [businessId, phoneToUse]
       );
 
       if (knownClientResult.rows.length > 0) {
         knownClient = knownClientResult.rows[0];
+        setSessionMemory(pendingKey, {
+          phone: knownClient.phone,
+          name: knownClient.name,
+        });
       }
     }
 
@@ -381,6 +420,7 @@ Rules:
 - If a last booking exists, use it.
 - If no last booking is available, ask for their phone number to retrieve it.
 15. If the user says "same" but does NOT include a new time or date, ask for confirmation before booking.
+16. If a known returning client is shown above, and the user does not type their phone number again, continue using that known returning client for this session.
 
 Return booking JSON like this:
 
@@ -407,12 +447,15 @@ Otherwise respond normally in plain text.
         if (
           parsed &&
           typeof parsed === "object" &&
-          parsed.phone &&
           parsed.service &&
           parsed.date &&
-          parsed.time
+          parsed.time &&
+          (parsed.phone || knownClient?.phone || session?.phone)
         ) {
-          booking = parsed;
+          booking = {
+            ...parsed,
+            phone: parsed.phone || knownClient?.phone || session?.phone,
+          };
         }
       } catch {
         booking = null;
@@ -444,6 +487,11 @@ Otherwise respond normally in plain text.
       booking.name = knownClient.name;
     }
 
+    // Force correct stored phone from session/known client if needed
+    if (!booking.phone && (knownClient?.phone || session?.phone)) {
+      booking.phone = knownClient?.phone || session?.phone;
+    }
+
     if (booking && services.length > 0) {
       const match = findBestServiceMatch(booking.service, services);
       if (match) booking.service = match.name;
@@ -457,6 +505,10 @@ Otherwise respond normally in plain text.
         : findProviderFromText(message, providers);
 
       let providerId = providerMatch ? providerMatch.id : null;
+
+      if (!providerId && lastBooking?.provider_id) {
+        providerId = lastBooking.provider_id;
+      }
 
       if (!providerId) {
         const providerResult = await pool.query(
@@ -569,6 +621,13 @@ Otherwise respond normally in plain text.
       );
 
       pendingBookings.delete(pendingKey);
+
+      if (booking.phone || booking.name) {
+        setSessionMemory(pendingKey, {
+          phone: booking.phone,
+          name: booking.name,
+        });
+      }
 
       try {
         await fetch(BOOKING_API_URL, {
