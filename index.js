@@ -398,7 +398,9 @@ ${
 Last booking:
 ${
   lastBooking
-    ? `Service: ${lastBooking.service}, Provider ID: ${lastBooking.provider_id}`
+    ? `Service: ${lastBooking.service}, Provider: ${
+        providers.find((p) => p.id === lastBooking.provider_id)?.name || "Unknown"
+      }`
     : "None"
 }
 
