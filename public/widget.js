@@ -7,6 +7,9 @@
     return;
   }
 
+  // 🔹 NEW: local storage key for this business
+  const PHONE_STORAGE_KEY = `zyra_phone_${businessSlug}`;
+
   // Create widget container
   const container = document.createElement("div");
   container.style.position = "fixed";
@@ -91,11 +94,23 @@
   }
 
   async function sendMessage() {
-    const text = input.value.trim();
+    let text = input.value.trim();
     if (!text) return;
 
     addMessage(text, true);
     input.value = "";
+
+    // 🔹 NEW: detect phone number and store it
+    const phoneMatch = text.match(/\b0\d{10,14}\b/);
+    if (phoneMatch) {
+      localStorage.setItem(PHONE_STORAGE_KEY, phoneMatch[0]);
+    }
+
+    // 🔹 NEW: auto-attach stored phone if not included
+    const storedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+    if (storedPhone && !phoneMatch) {
+      text = `${text} ${storedPhone}`;
+    }
 
     try {
       const response = await fetch(
