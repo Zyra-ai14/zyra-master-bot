@@ -260,7 +260,9 @@ app.post("/chat", async (req, res) => {
     }
 
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
-    const pendingKey = getPendingBookingKey(req, slug);
+    const earlyPhoneMatch = message.match(/\b0\d{10,14}\b/);
+const earlyPhone = earlyPhoneMatch ? earlyPhoneMatch[0] : null;
+const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     const session = getSessionMemory(pendingKey);
 
     const businessResult = await pool.query(
