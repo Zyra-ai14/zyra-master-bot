@@ -42,7 +42,18 @@ const PENDING_BOOKING_TTL_MS = 15 * 60 * 1000;
 const sessionMemory = new Map();
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
-function getPendingBookingKey(req, slug) {
+function getPendingBookingKey(req, slug, phone = null) {
+  if (phone) {
+    return `${slug}::phone::${phone}`;
+  }
+
+  const ip =
+    req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
+    req.ip ||
+    "unknown";
+
+  return `${slug}::ip::${ip}`;
+}
   const ip =
     req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
     req.ip ||
