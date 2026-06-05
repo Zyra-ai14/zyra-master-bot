@@ -54,12 +54,6 @@ function getPendingBookingKey(req, slug, phone = null) {
 
   return `${slug}::ip::${ip}`;
 }
-  const ip =
-    req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
-    req.ip ||
-    "unknown";
-  return `${slug}::${ip}`;
-}
 
 function cleanupPendingBooking(key) {
   const pending = pendingBookings.get(key);
