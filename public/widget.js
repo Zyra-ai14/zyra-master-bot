@@ -100,15 +100,15 @@
     addMessage(text, true);
     input.value = "";
 
-    // 🔹 NEW: detect phone number and store it
+    // Save phone if user typed it
     const phoneMatch = text.match(/\b0\d{10,14}\b/);
     if (phoneMatch) {
       localStorage.setItem(PHONE_STORAGE_KEY, phoneMatch[0]);
     }
 
-    // 🔹 NEW: auto-attach stored phone if not included
+    // Always attach stored phone if it exists and is not already in the message
     const storedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
-    if (storedPhone && !phoneMatch) {
+    if (storedPhone && !text.includes(storedPhone)) {
       text = `${text} ${storedPhone}`;
     }
 
