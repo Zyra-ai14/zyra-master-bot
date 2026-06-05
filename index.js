@@ -186,6 +186,26 @@ function normalizeTimeInput(timeText) {
 
   return null;
 }
+function extractTimeFromText(text) {
+  if (!text || typeof text !== "string") return null;
+
+  const direct = normalizeTimeInput(text);
+  if (direct) return direct;
+
+  const raw = text.toLowerCase();
+
+  let match = raw.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  if (match) {
+    return normalizeTimeInput(match[0]);
+  }
+
+  match = raw.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (match) {
+    return normalizeTimeInput(match[0]);
+  }
+
+  return null;
+}
 
 function formatTimeForHumans(normalizedTime) {
   if (!normalizedTime || typeof normalizedTime !== "string") return normalizedTime;
@@ -347,7 +367,7 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     }
 
     const pending = cleanupPendingBooking(pendingKey);
-    const possibleTime = normalizeTimeInput(message);
+    const possibleTime = extractTimeFromText(message);
 
     if (pending && possibleTime) {
       booking = {
