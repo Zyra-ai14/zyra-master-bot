@@ -398,14 +398,15 @@ if (knownClient && wantsToReschedule) {
     
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
+    const possibleDate = extractDateFromText(message);
 
-    if (pending && possibleTime) {
+   if (pending && (possibleTime || possibleDate)) {
       booking = {
         name: pending.name,
         phone: pending.phone,
         service: pending.service,
-        date: pending.date,
-        time: possibleTime,
+date: possibleDate || pending.date,
+time: possibleTime || pending.time,
         notes: pending.notes || "",
       };
     } else {
