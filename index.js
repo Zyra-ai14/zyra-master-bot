@@ -425,8 +425,16 @@ if (knownClient && wantsToReschedule) {
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
     const possibleDate = extractDateFromText(message);
-
-   if (pending && (possibleTime || possibleDate)) {
+    if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)) {
+  booking = {
+    name: knownClient.name,
+    phone: knownClient.phone,
+    service: existingActiveBooking.service,
+    date: possibleDate || existingActiveBooking.date,
+    time: possibleTime || existingActiveBooking.time,
+    notes: existingActiveBooking.notes || "",
+  };
+} else if (pending && (possibleTime || possibleDate)) {
       booking = {
         name: pending.name,
         phone: pending.phone,
