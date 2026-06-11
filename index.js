@@ -336,6 +336,12 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     let knownClient = null;
     let lastBooking = null;
 
+    let existingActiveBooking = null;
+
+const wantsToReschedule =
+  /\b(reschedule|rearrange|move|change)\b/i.test(message) &&
+  /\b(appointment|booking|time|date|slot|it)\b/i.test(message);
+
     // Detect returning customer by phone number in the message or session
     const phoneMatch = message.match(/\b0\d{10,14}\b/);
     let phoneToUse = null;
