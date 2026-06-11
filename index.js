@@ -461,6 +461,16 @@ ${
     : "None"
 }
 
+Current appointment being changed:
+${
+  existingActiveBooking
+    ? `Service: ${existingActiveBooking.service}
+Date: ${existingActiveBooking.date}
+Time: ${existingActiveBooking.time}
+Status: ${existingActiveBooking.status}`
+    : "None"
+}
+
 Rules:
 1. Users may ask for a specific staff member.
 2. Users may ask "who does X service".
@@ -483,6 +493,13 @@ Rules:
 - If the user does NOT provide a time or date, ask for confirmation before booking.
 16. If a known returning client is shown above, and the user does not type their phone number again, continue using that known returning client for this session.
 17. NEVER mention provider IDs to the user. Always use provider names only.
+18. If "Current appointment being changed" is not None, the user is trying to reschedule or change an existing booking.
+19. When changing an existing booking, reuse the current appointment's service and provider unless the user clearly asks to change them.
+20. If the user says "move my appointment to 5pm" or "change it to 5pm", keep the same service, provider, and date unless the user gives a new date.
+21. If the user gives only a new time during a reschedule, return booking JSON using the current appointment's service, provider, and date with the new time.
+22. If the user gives only a new date during a reschedule, ask what time they would like.
+23. If enough reschedule details are available, return ONLY booking JSON exactly like the normal booking JSON.
+24. Do not ask which service they want when rescheduling unless the user clearly says they want a different service.
 
 Return booking JSON like this:
 
