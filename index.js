@@ -207,6 +207,32 @@ function extractTimeFromText(text) {
   return null;
 }
 
+function extractDateFromText(text) {
+  if (!text || typeof text !== "string") return null;
+
+  const raw = text.toLowerCase();
+
+  if (raw.includes("tomorrow")) return "tomorrow";
+  if (raw.includes("today")) return "today";
+
+  const days = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+
+  for (const day of days) {
+    if (raw.includes(`next ${day}`)) return `next ${day}`;
+    if (raw.includes(day)) return day;
+  }
+
+  return null;
+}
+
 function formatTimeForHumans(normalizedTime) {
   if (!normalizedTime || typeof normalizedTime !== "string") return normalizedTime;
 
