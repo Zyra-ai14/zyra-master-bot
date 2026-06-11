@@ -265,6 +265,20 @@ function getNextAvailableTimes(bookedTimes, requestedTime) {
   return suggestions;
 }
 
+async function getLatestActiveBooking(clientId) {
+  const result = await pool.query(
+    `SELECT id, business_id, client_id, provider_id, service, date, time, notes, status
+     FROM bookings
+     WHERE client_id = $1
+     AND COALESCE(status, 'booked') != 'cancelled'
+     ORDER BY id DESC
+     LIMIT 1`,
+    [clientId]
+  );
+
+  return result.rows[0] || null;
+}
+
 app.post("/chat", async (req, res) => {
   try {
     const { message, businessSlug } = req.body;
