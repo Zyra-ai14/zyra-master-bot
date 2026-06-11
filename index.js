@@ -386,6 +386,16 @@ const wantsToReschedule =
       }
     }
 
+if (knownClient && wantsToReschedule) {
+  existingActiveBooking = await getLatestActiveBooking(knownClient.id);
+
+  if (!existingActiveBooking) {
+    return res.json({
+      reply: "I couldn't find any active bookings to change.",
+    });
+  }
+}
+    
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
 
@@ -658,19 +668,41 @@ Otherwise respond normally in plain text.
         clientId = clientResult.rows[0].id;
       }
 
-      await pool.query(
-        `INSERT INTO bookings (business_id, client_id, provider_id, service, date, time, notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          businessId,
-          clientId,
-          providerId,
-          booking.service,
-          booking.date,
-          normalizedTime,
-          notes,
-        ]
-      );
+      if (existingActiveBooking && wantsToReschedule) {
+  await pool.query(
+    `UPDATE bookings
+     SET
+       provider_id = $1,
+       service = $2,
+       date = $3,
+       time = $4,
+       notes = $5,
+       updated_at = NOW()
+     WHERE id = $6`,
+    [
+      providerId,
+      booking.service,
+      booking.date,
+      normalizedTime,
+      notes,
+      existingActiveBooking.id,
+    ]
+  );
+} else {
+  await pool.query(
+    `INSERT INTO bookings (business_id, client_id, provider_id, service, date, time, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      businessId,
+      clientId,
+      providerId,
+      booking.service,
+      booking.date,
+      normalizedTime,
+      notes,
+    ]
+  );
+}
 
       pendingBookings.delete(pendingKey);
 
