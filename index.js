@@ -425,7 +425,18 @@ if (knownClient && wantsToReschedule) {
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
     const possibleDate = extractDateFromText(message);
-    if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)) {
+if (
+  existingActiveBooking &&
+  wantsToReschedule &&
+  possibleDate &&
+  !possibleTime
+) {
+  return res.json({
+    reply: `What time would you like for your appointment on ${possibleDate}?`,
+  });
+}
+
+if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)) {
   booking = {
     name: knownClient.name,
     phone: knownClient.phone,
