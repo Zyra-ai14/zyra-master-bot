@@ -1,4 +1,4 @@
-import express from "express";
+£import express from "express";
 import cors from "cors";
 import { OpenAI } from "openai";
 import pkg from "pg";
@@ -431,11 +431,23 @@ if (
   possibleDate &&
   !possibleTime
 ) {
+  pendingBookings.set(pendingKey, {
+    createdAt: Date.now(),
+    name: knownClient.name,
+    phone: knownClient.phone,
+    service: existingActiveBooking.service,
+    date: possibleDate,
+    time: null,
+    notes: existingActiveBooking.notes || "",
+    providerId: existingActiveBooking.provider_id,
+    isReschedule: true,
+    existingBookingId: existingActiveBooking.id,
+  });
+
   return res.json({
     reply: `What time would you like for your appointment on ${possibleDate}?`,
   });
 }
-
 if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)) {
   booking = {
     name: knownClient.name,
@@ -730,8 +742,19 @@ Otherwise respond normally in plain text.
 
         clientId = clientResult.rows[0].id;
       }
+const rescheduleBookingId =
+  existingActiveBooking?.id ||
+  (pending?.isReschedule ? pending.existingBookingId : null);
 
-      if (existingActiveBooking && wantsToReschedule) {
+const rescheduleProviderId =
+  pending?.isReschedule && pending?.providerId
+    ? pending.providerId
+    : providerId;
+
+const shouldUpdateExistingBooking =
+  (existingActiveBooking && wantsToReschedule) ||
+  (pending?.isReschedule && pending?.existingBookingId);
+   if (shouldUpdateExistingBooking) {
   await pool.query(
     `UPDATE bookings
      SET
@@ -743,12 +766,12 @@ Otherwise respond normally in plain text.
        updated_at = NOW()
      WHERE id = $6`,
     [
-      providerId,
+rescheduleProviderId,
       booking.service,
       booking.date,
       normalizedTime,
       notes,
-      existingActiveBooking.id,
+rescheduleBookingId,
     ]
   );
 } else {
