@@ -677,23 +677,26 @@ Otherwise respond normally in plain text.
 
       if (providerId) {
         const existingBookingResult = await pool.query(
-          `SELECT id
-           FROM bookings
-           WHERE provider_id = $1
-           AND date = $2
-           AND time = $3
-           LIMIT 1`,
-          [providerId, booking.date, normalizedTime]
+      `SELECT id
+FROM bookings
+WHERE business_id = $1
+AND provider_id = $2
+AND LOWER(date) = LOWER($3)
+AND time = $4
+AND status = 'booked'
+LIMIT 1`,
+[businessId, providerId, booking.date, normalizedTime]
         );
 
         if (existingBookingResult.rows.length > 0) {
           const bookedTimesResult = await pool.query(
-            `SELECT time
-             FROM bookings
-             WHERE business_id = $1
-             AND provider_id = $2
-             AND date = $3`,
-            [businessId, providerId, booking.date]
+       `SELECT time
+FROM bookings
+WHERE business_id = $1
+AND provider_id = $2
+AND LOWER(date) = LOWER($3)
+AND status = 'booked'`,
+[businessId, providerId, booking.date]
           );
 
           const bookedTimes = bookedTimesResult.rows.map((r) => r.time);
