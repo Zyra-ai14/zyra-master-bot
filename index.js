@@ -605,7 +605,53 @@ Otherwise respond normally in plain text.
             reply: `Welcome back ${knownClient.name} — would you like to book ${lastBooking.service} with ${providerName} again?`,
           });
         }
+const requestedService = findBestServiceMatch(message, services);
+const requestedProvider = findProviderFromText(message, providers);
 
+const requestedNameMatch = message.match(
+  /\b(?:my name is|i am|i'm)\s+([a-z][a-z'-]*)/i
+);
+
+const requestedName =
+  requestedNameMatch?.[1] ||
+  knownClient?.name ||
+  session?.name ||
+  null;
+
+const requestedPhone =
+  earlyPhone ||
+  knownClient?.phone ||
+  session?.phone ||
+  null;
+
+const providerOffersService =
+  requestedProvider &&
+  requestedService &&
+  requestedProvider.services?.some(
+    (serviceName) =>
+      serviceName.toLowerCase() === requestedService.name.toLowerCase()
+  );
+
+if (
+  requestedProvider &&
+  requestedService &&
+  !providerOffersService &&
+  requestedName &&
+  requestedPhone &&
+  possibleDate &&
+  possibleTime
+) {
+  pendingBookings.set(pendingKey, {
+    createdAt: Date.now(),
+    name: requestedName,
+    phone: requestedPhone,
+    service: requestedService.name,
+    date: possibleDate,
+    time: possibleTime,
+    notes: "",
+    providerId: requestedProvider.id,
+  });
+}
         return res.json({ reply: aiReply });
       }
     }
