@@ -43,10 +43,6 @@ const sessionMemory = new Map();
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
 function getPendingBookingKey(req, slug, phone = null) {
-  if (phone) {
-    return `${slug}::phone::${phone}`;
-  }
-
   const ip =
     req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
     req.ip ||
@@ -54,7 +50,6 @@ function getPendingBookingKey(req, slug, phone = null) {
 
   return `${slug}::ip::${ip}`;
 }
-
 function cleanupPendingBooking(key) {
   const pending = pendingBookings.get(key);
   if (!pending) return null;
@@ -637,9 +632,13 @@ Otherwise respond normally in plain text.
     if (booking) {
       const notes = booking.notes || "";
 
-      const providerMatch = pending
-        ? providers.find((p) => p.id === pending.providerId) || null
-        : findProviderFromText(message, providers);
+      const providerFromMessage = findProviderFromText(message, providers);
+
+const providerMatch =
+  providerFromMessage ||
+  (pending
+    ? providers.find((p) => p.id === pending.providerId) || null
+    : null);
 
       let providerId = providerMatch ? providerMatch.id : null;
 
