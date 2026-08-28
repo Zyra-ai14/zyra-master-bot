@@ -220,12 +220,26 @@ function extractDateFromText(text) {
     "sunday",
   ];
 
+  let bestMatch = null;
+  let bestIndex = -1;
+
   for (const day of days) {
-    if (raw.includes(`next ${day}`)) return `next ${day}`;
-    if (raw.includes(day)) return day;
+    const nextDay = `next ${day}`;
+
+    const nextIndex = raw.lastIndexOf(nextDay);
+    if (nextIndex > bestIndex) {
+      bestIndex = nextIndex;
+      bestMatch = nextDay;
+    }
+
+    const dayIndex = raw.lastIndexOf(day);
+    if (dayIndex > bestIndex) {
+      bestIndex = dayIndex;
+      bestMatch = day;
+    }
   }
 
-  return null;
+  return bestMatch;
 }
 
 function formatTimeForHumans(normalizedTime) {
