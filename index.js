@@ -624,8 +624,7 @@ Otherwise respond normally in plain text.
             "your usual stylist";
 
           return res.json({
-            reply: `Welcome back ${knownClient.name} — would you like to book ${lastBooking.service} with ${providerName} again?`,
-          });
+reply: `Welcome back ${knownClient.name}. Would you like to book ${lastBooking.service} with ${providerName} again?`,          });
         }
 const requestedService = findBestServiceMatch(message, services);
 const requestedProvider = findProviderFromText(message, providers);
