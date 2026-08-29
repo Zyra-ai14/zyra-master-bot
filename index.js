@@ -373,8 +373,7 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     const session = getSessionMemory(pendingKey);
 
     const businessResult = await pool.query(
-"SELECT id, name, timezone FROM businesses WHERE slug = $1",      [slug]
-    );
+"SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",    );
 
     const business = businessResult.rows[0];
     if (!business) {
@@ -387,8 +386,9 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
 
     const businessId = business.id;
 const businessTimezone = business.timezone || "Europe/London";
+    const businessLocale = business.locale || "en-GB";
 
-    const businessCurrentDateTime = new Intl.DateTimeFormat("en-GB", {
+const businessCurrentDateTime = new Intl.DateTimeFormat(businessLocale, {
   timeZone: businessTimezone,
   dateStyle: "full",
   timeStyle: "long",
@@ -936,8 +936,7 @@ rescheduleBookingId,
 
       const providerName = assignedProvider ? assignedProvider.name : null;
       const humanTime = formatTimeForHumans(normalizedTime);
-      const customerDate = formatCustomerDate(booking.date);
-
+const customerDate = formatCustomerDate(booking.date, businessLocale);
      const dateText =
   booking.date.toLowerCase() === "tomorrow" ||
   booking.date.toLowerCase().startsWith("next ")
