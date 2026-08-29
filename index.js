@@ -373,8 +373,7 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     const session = getSessionMemory(pendingKey);
 
     const businessResult = await pool.query(
-"SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",    );
-
+"SELECT id, name, timezone, locale FROM businesses WHERE slug = $1", [slug]
     const business = businessResult.rows[0];
     if (!business) {
       console.error("No business found for slug:", slug);
