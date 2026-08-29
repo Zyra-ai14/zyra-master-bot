@@ -130,6 +130,50 @@ function findProviderFromText(userText, providers) {
   return null;
 }
 
+function getOrdinalSuffix(day) {
+  const remainder100 = day % 100;
+
+  if (remainder100 >= 11 && remainder100 <= 13) {
+    return `${day}th`;
+  }
+
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
+}
+
+function formatCustomerDate(dateText, locale = "en-GB") {
+  if (!dateText || typeof dateText !== "string") return dateText;
+
+  const match = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateText;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  const weekday = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(date);
+
+  const monthName = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    timeZone: "UTC",
+  }).format(date);
+
+  return `${weekday} ${getOrdinalSuffix(day)} ${monthName}`;
+}
+
 function normalizeTimeInput(timeText) {
   if (!timeText || typeof timeText !== "string") return null;
 
@@ -892,12 +936,13 @@ rescheduleBookingId,
 
       const providerName = assignedProvider ? assignedProvider.name : null;
       const humanTime = formatTimeForHumans(normalizedTime);
+      const customerDate = formatCustomerDate(booking.date);
 
-      const dateText =
-        booking.date.toLowerCase() === "tomorrow" ||
-        booking.date.toLowerCase().startsWith("next ")
-          ? `${booking.date} at ${humanTime}`
-          : `on ${booking.date} at ${humanTime}`;
+     const dateText =
+  booking.date.toLowerCase() === "tomorrow" ||
+  booking.date.toLowerCase().startsWith("next ")
+    ? `${booking.date} at ${humanTime}`
+    : `on ${customerDate} at ${humanTime}`;
 
       const replyText = providerName
         ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}. Let me know if you'd like to change anything.`
