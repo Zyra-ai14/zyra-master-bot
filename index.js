@@ -329,8 +329,7 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     const session = getSessionMemory(pendingKey);
 
     const businessResult = await pool.query(
-      "SELECT id, name FROM businesses WHERE slug = $1",
-      [slug]
+"SELECT id, name, timezone FROM businesses WHERE slug = $1",      [slug]
     );
 
     const business = businessResult.rows[0];
@@ -343,7 +342,13 @@ const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
     }
 
     const businessId = business.id;
+const businessTimezone = business.timezone || "Europe/London";
 
+    const businessCurrentDateTime = new Intl.DateTimeFormat("en-GB", {
+  timeZone: businessTimezone,
+  dateStyle: "full",
+  timeStyle: "long",
+}).format(new Date());
     const servicesResult = await pool.query(
       "SELECT id, name, description, price_cents, duration_minutes FROM services WHERE business_id = $1 AND is_active = TRUE",
       [businessId]
@@ -503,7 +508,10 @@ time: possibleTime || pending.time,
             role: "system",
             content: `
 You are Zyra — the intelligent AI booking assistant for service-based businesses.
-
+BUSINESS TIMEZONE: ${businessTimezone}
+CURRENT BUSINESS DATE AND TIME: ${businessCurrentDateTime}
+Interpret all dates and times using this business timezone.
+Words such as "today", "tomorrow", and weekdays must refer to the business's local date, not the server's date.
 WRITING STYLE:
 Use natural, everyday British English.
 Write like a professional human receptionist, not like an AI assistant.
