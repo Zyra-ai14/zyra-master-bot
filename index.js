@@ -591,7 +591,10 @@ const possibleDate = resolveRelativeDateToIso(
   extractDateFromText(message),
   businessTimezone,
   businessLocale
-);  existingActiveBooking &&
+);
+
+if (
+  existingActiveBooking &&
   wantsToReschedule &&
   possibleDate &&
   !possibleTime
