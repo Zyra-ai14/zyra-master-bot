@@ -275,6 +275,18 @@ function extractDateFromText(text) {
       bestIndex = nextIndex;
       bestMatch = nextDay;
     }
+
+}
+    const dayIndex = raw.lastIndexOf(day);
+    if (dayIndex > bestIndex) {
+      bestIndex = dayIndex;
+      bestMatch = day;
+    }
+  }
+
+  return bestMatch;
+}
+
 function resolveRelativeDateToIso(dateText, timeZone = "Europe/London") {
   if (!dateText || typeof dateText !== "string") return dateText;
 
@@ -336,18 +348,7 @@ function resolveRelativeDateToIso(dateText, timeZone = "Europe/London") {
   }
 
   return dateText;
-}
-    const dayIndex = raw.lastIndexOf(day);
-    if (dayIndex > bestIndex) {
-      bestIndex = dayIndex;
-      bestMatch = day;
-    }
-  }
-
-  return bestMatch;
-}
-
-function formatTimeForHumans(normalizedTime) {
+}function formatTimeForHumans(normalizedTime) {
   if (!normalizedTime || typeof normalizedTime !== "string") return normalizedTime;
 
   const match = normalizedTime.match(/^(\d{2}):(\d{2})$/);
