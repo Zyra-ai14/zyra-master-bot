@@ -276,7 +276,7 @@ function extractDateFromText(text) {
       bestMatch = nextDay;
     }
 
-}
+
     const dayIndex = raw.lastIndexOf(day);
     if (dayIndex > bestIndex) {
       bestIndex = dayIndex;
