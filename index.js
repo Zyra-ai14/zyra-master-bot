@@ -309,7 +309,6 @@ function resolveRelativeDateToIso(
     return raw;
   }
 const numericDate = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-
 if (numericDate) {
   const first = Number(numericDate[1]);
   const second = Number(numericDate[2]);
