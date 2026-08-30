@@ -252,6 +252,13 @@ function extractDateFromText(text) {
   const raw = text.toLowerCase();
 
   if (raw.includes("tomorrow")) return "tomorrow";
+  const numericDateMatch = raw.match(
+  /\b\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}\b/
+);
+
+if (numericDateMatch) {
+  return numericDateMatch[0];
+}
   if (raw.includes("today")) return "today";
 
   const days = [
@@ -290,15 +297,42 @@ if (dayIndex > bestIndex && !isPartOfNextDay) {
   return bestMatch;
 }
 
-function resolveRelativeDateToIso(dateText, timeZone = "Europe/London") {
-  if (!dateText || typeof dateText !== "string") return dateText;
+function resolveRelativeDateToIso(
+  dateText,
+  timeZone = "Europe/London",
+  locale = "en-GB"
+) {  if (!dateText || typeof dateText !== "string") return dateText;
 
   const raw = dateText.trim().toLowerCase();
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     return raw;
   }
+const numericDate = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
 
+if (numericDate) {
+  const first = Number(numericDate[1]);
+  const second = Number(numericDate[2]);
+  const year = Number(numericDate[3]);
+
+  const usesMonthFirst = /^en-US\b/i.test(locale);
+
+  const month = usesMonthFirst ? first : second;
+  const day = usesMonthFirst ? second : first;
+
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+
+  const isValid =
+    parsedDate.getUTCFullYear() === year &&
+    parsedDate.getUTCMonth() === month - 1 &&
+    parsedDate.getUTCDate() === day;
+
+  if (isValid) {
+    return parsedDate.toISOString().slice(0, 10);
+  }
+
+  return dateText;
+}
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone,
     year: "numeric",
@@ -554,8 +588,11 @@ if (knownClient && wantsToReschedule) {
     
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
-const possibleDate = resolveRelativeDateToIso(extractDateFromText(message), businessTimezone);if (
-  existingActiveBooking &&
+const possibleDate = resolveRelativeDateToIso(
+  extractDateFromText(message),
+  businessTimezone,
+  businessLocale
+);  existingActiveBooking &&
   wantsToReschedule &&
   possibleDate &&
   !possibleTime
@@ -859,8 +896,11 @@ const providerMatch =
       const assignedProvider =
         providers.find((p) => p.id === providerId) || providerMatch || null;
 
-      booking.date = resolveRelativeDateToIso(booking.date, businessTimezone);
-      const normalizedTime = normalizeTimeInput(booking.time);
+booking.date = resolveRelativeDateToIso(
+  booking.date,
+  businessTimezone,
+  businessLocale
+);      const normalizedTime = normalizeTimeInput(booking.time);
 
       if (!normalizedTime) {
         return res.json({
