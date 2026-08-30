@@ -275,7 +275,68 @@ function extractDateFromText(text) {
       bestIndex = nextIndex;
       bestMatch = nextDay;
     }
+function resolveRelativeDateToIso(dateText, timeZone = "Europe/London") {
+  if (!dateText || typeof dateText !== "string") return dateText;
 
+  const raw = dateText.trim().toLowerCase();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = Number(parts.find((part) => part.type === "month")?.value);
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+
+  const baseDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (raw === "today") {
+    return baseDate.toISOString().slice(0, 10);
+  }
+
+  if (raw === "tomorrow") {
+    baseDate.setUTCDate(baseDate.getUTCDate() + 1);
+    return baseDate.toISOString().slice(0, 10);
+  }
+
+  const weekdays = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  const weekdayName = raw.startsWith("next ")
+    ? raw.replace("next ", "")
+    : raw;
+
+  if (weekdays[weekdayName] !== undefined) {
+    const currentDay = baseDate.getUTCDay();
+    const targetDay = weekdays[weekdayName];
+
+    let daysAhead = (targetDay - currentDay + 7) % 7;
+
+    if (daysAhead === 0) {
+      daysAhead = 7;
+    }
+
+    baseDate.setUTCDate(baseDate.getUTCDate() + daysAhead);
+
+    return baseDate.toISOString().slice(0, 10);
+  }
+
+  return dateText;
+}
     const dayIndex = raw.lastIndexOf(day);
     if (dayIndex > bestIndex) {
       bestIndex = dayIndex;
@@ -483,8 +544,7 @@ if (knownClient && wantsToReschedule) {
     
     const pending = cleanupPendingBooking(pendingKey);
     const possibleTime = extractTimeFromText(message);
-    const possibleDate = extractDateFromText(message);
-if (
+const possibleDate = resolveRelativeDateToIso(extractDateFromText(message), businessTimezone);if (
   existingActiveBooking &&
   wantsToReschedule &&
   possibleDate &&
@@ -938,11 +998,7 @@ rescheduleBookingId,
       const providerName = assignedProvider ? assignedProvider.name : null;
       const humanTime = formatTimeForHumans(normalizedTime);
 const customerDate = formatCustomerDate(booking.date, businessLocale);
-     const dateText =
-  booking.date.toLowerCase() === "tomorrow" ||
-  booking.date.toLowerCase().startsWith("next ")
-    ? `${booking.date} at ${humanTime}`
-    : `on ${customerDate} at ${humanTime}`;
+   const dateText = `on ${customerDate} at ${humanTime}`;
 
       const replyText = providerName
         ? `You're booked for ${booking.service} with ${providerName} ${dateText} under ${booking.name}. Let me know if you'd like to change anything.`
