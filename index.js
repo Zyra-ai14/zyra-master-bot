@@ -328,19 +328,25 @@ function resolveRelativeDateToIso(dateText, timeZone = "Europe/London") {
     saturday: 6,
   };
 
-  const weekdayName = raw.startsWith("next ")
-    ? raw.replace("next ", "")
-    : raw;
+  const isNextWeek = raw.startsWith("next ");
 
-  if (weekdays[weekdayName] !== undefined) {
-    const currentDay = baseDate.getUTCDay();
-    const targetDay = weekdays[weekdayName];
+const weekdayName = isNextWeek
+  ? raw.replace("next ", "")
+  : raw;
 
-    let daysAhead = (targetDay - currentDay + 7) % 7;
+if (weekdays[weekdayName] !== undefined) {
+  const currentDay = baseDate.getUTCDay();
+  const targetDay = weekdays[weekdayName];
 
-    if (daysAhead === 0) {
-      daysAhead = 7;
-    }
+  let daysAhead = (targetDay - currentDay + 7) % 7;
+
+  if (daysAhead === 0) {
+    daysAhead = 7;
+  }
+
+  if (isNextWeek) {
+    daysAhead += 7;
+  }
 
     baseDate.setUTCDate(baseDate.getUTCDate() + daysAhead);
 
