@@ -277,11 +277,14 @@ function extractDateFromText(text) {
     }
 
 
-    const dayIndex = raw.lastIndexOf(day);
-    if (dayIndex > bestIndex) {
-      bestIndex = dayIndex;
-      bestMatch = day;
-    }
+   const dayIndex = raw.lastIndexOf(day);
+const isPartOfNextDay =
+  dayIndex >= 5 && raw.slice(dayIndex - 5, dayIndex) === "next ";
+
+if (dayIndex > bestIndex && !isPartOfNextDay) {
+  bestIndex = dayIndex;
+  bestMatch = day;
+}
   }
 
   return bestMatch;
