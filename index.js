@@ -859,6 +859,7 @@ const providerMatch =
       const assignedProvider =
         providers.find((p) => p.id === providerId) || providerMatch || null;
 
+      booking.date = resolveRelativeDateToIso(booking.date, businessTimezone);
       const normalizedTime = normalizeTimeInput(booking.time);
 
       if (!normalizedTime) {
