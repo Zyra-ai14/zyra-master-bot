@@ -342,7 +342,59 @@ if (numericDate) {
   const year = Number(parts.find((part) => part.type === "year")?.value);
   const month = Number(parts.find((part) => part.type === "month")?.value);
   const day = Number(parts.find((part) => part.type === "day")?.value);
+const monthNames = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+};
 
+const writtenDateMatch = raw.match(
+  /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?$/
+);
+
+if (writtenDateMatch) {
+  const writtenMonth = monthNames[writtenDateMatch[1]];
+  const writtenDay = Number(writtenDateMatch[2]);
+  let writtenYear = writtenDateMatch[3]
+    ? Number(writtenDateMatch[3])
+    : year;
+
+  let parsedWrittenDate = new Date(
+    Date.UTC(writtenYear, writtenMonth, writtenDay)
+  );
+
+  const currentBusinessDate = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    !writtenDateMatch[3] &&
+    parsedWrittenDate < currentBusinessDate
+  ) {
+    writtenYear += 1;
+    parsedWrittenDate = new Date(
+      Date.UTC(writtenYear, writtenMonth, writtenDay)
+    );
+  }
+
+  const isValidWrittenDate =
+    parsedWrittenDate.getUTCFullYear() === writtenYear &&
+    parsedWrittenDate.getUTCMonth() === writtenMonth &&
+    parsedWrittenDate.getUTCDate() === writtenDay;
+
+  if (isValidWrittenDate) {
+    return parsedWrittenDate.toISOString().slice(0, 10);
+  }
+
+  return dateText;
+}
   const baseDate = new Date(Date.UTC(year, month - 1, day));
 
   if (raw === "today") {
