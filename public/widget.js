@@ -9,7 +9,18 @@
 
   // 🔹 NEW: local storage key for this business
   const PHONE_STORAGE_KEY = `zyra_phone_${businessSlug}`;
+const SESSION_STORAGE_KEY = `zyra_session_${businessSlug}`;
 
+let sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+
+if (!sessionId) {
+  sessionId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+}
   // Create widget container
   const container = document.createElement("div");
   container.style.position = "fixed";
@@ -122,6 +133,7 @@
           },
           body: JSON.stringify({
             businessSlug,
+            sessionId,
             message: text,
           }),
         }
