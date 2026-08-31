@@ -42,7 +42,11 @@ const PENDING_BOOKING_TTL_MS = 15 * 60 * 1000;
 const sessionMemory = new Map();
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
-function getPendingBookingKey(req, slug, phone = null) {
+function getPendingBookingKey(req, slug, phone = null, sessionId = null) {
+  if (sessionId) {
+    return `${slug}::session::${sessionId}`;
+  }
+
   const ip =
     req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
     req.ip ||
@@ -516,8 +520,7 @@ async function getLatestActiveBooking(clientId) {
 
 app.post("/chat", async (req, res) => {
   try {
-    const { message, businessSlug } = req.body;
-
+const { message, businessSlug, sessionId } = req.body;
     if (!message) {
       return res.json({ reply: "You didn't send a message." });
     }
@@ -525,9 +528,7 @@ app.post("/chat", async (req, res) => {
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
     const earlyPhoneMatch = message.match(/\b0\d{10,14}\b/);
 const earlyPhone = earlyPhoneMatch ? earlyPhoneMatch[0] : null;
-const pendingKey = getPendingBookingKey(req, slug, earlyPhone);
-    const session = getSessionMemory(pendingKey);
-
+const pendingKey = getPendingBookingKey(req, slug, earlyPhone, sessionId);
    const businessResult = await pool.query(
   "SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",
   [slug]
