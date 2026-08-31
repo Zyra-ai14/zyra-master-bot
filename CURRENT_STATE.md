@@ -1,6 +1,6 @@
 # Zyra AI — Current Development State
 
-Last updated: 28 August 2026
+Last updated: 31 August 2026
 
 This document records the exact current development state of Zyra.
 
@@ -1234,5 +1234,177 @@ The NEXT thing to do is verify this directly in the PostgreSQL `bookings` table 
 That is the exact current stopping point.
 
 ---
+---
 
+# 31 August 2026 Development Update
+
+## Date and Time Handling
+
+The booking engine now has deterministic backend handling for relative dates.
+
+Business-specific timezone and locale support has been introduced.
+
+Each business can now have:
+
+- `timezone`
+- `locale`
+
+Current test configurations include:
+
+- Zyra Test Salon: `Europe/London`, `en-GB`
+- Demo Business: `America/New_York`, `en-US`
+
+The backend uses the business timezone rather than relying on the Railway server timezone.
+
+Relative date phrases are resolved by the backend into ISO `YYYY-MM-DD` dates before booking data is written to PostgreSQL.
+
+Supported relative date behaviour has been successfully tested for:
+
+- today
+- tomorrow
+- weekdays
+- next weekday phrases such as `next Wednesday`
+
+Successful UK test examples include:
+
+- `today` -> `2026-08-30`
+- `tomorrow` -> `2026-08-31`
+- `next Wednesday` -> `2026-09-09`
+
+The final booking object is normalized before conflict detection and database writes. This prevents new bookings from storing relative strings such as `tomorrow`, `Saturday`, or `next Wednesday`.
+
+Customer-facing confirmations convert the normalized ISO date back into a natural human-readable date.
+
+Example:
+
+`2026-09-09` -> `Wednesday 9th September`
+
+Historical test rows still contain some old non-normalized date values. These are legacy test records and should eventually be cleaned or migrated.
+
+## Numeric Date and Locale Testing
+
+UK numeric date handling has been successfully tested.
+
+Example:
+
+`12/09/2026`
+
+was correctly interpreted as:
+
+`2026-09-12`
+
+and the customer confirmation correctly displayed:
+
+`Saturday 12th September`
+
+A separate US test business is configured with:
+
+- timezone: `America/New_York`
+- locale: `en-US`
+- slug: `demo`
+
+The local widget test page was switched between businesses using its `data-slug` attribute.
+
+This confirmed that the same widget and `/chat` endpoint can dynamically load different business data from PostgreSQL without changing the core bot code.
+
+The US test business correctly returned its own services rather than the Zyra Test Salon services.
+
+A US relative-date booking test was also successful.
+
+On 31 August 2026 UK time, the US business was still on 31 August locally. The request:
+
+`Book BIAB Infill with Jessica tomorrow at 3pm`
+
+correctly produced:
+
+`Tuesday 1st September`
+
+and PostgreSQL stored:
+
+- business_id: `2`
+- service: `BIAB Infill`
+- date: `2026-09-01`
+- time: `15:00`
+
+This confirms that relative dates are being calculated using the individual business timezone rather than the server timezone or the developer's local timezone.
+
+## Multi-Business Isolation Verification
+
+Multi-business behaviour has now been directly verified through the production widget and `/chat` endpoint.
+
+Changing the widget `data-slug` changes which business Zyra loads.
+
+The UK test salon returned:
+
+- Haircut
+- Hair Colour
+- Blow Dry
+
+The US Demo Business returned:
+
+- BIAB Infill
+- BIAB Removal + Reapply
+- Gel Polish
+
+This confirms that service data is being isolated by `business_id` and loaded dynamically for the selected business.
+
+Bookings created through the US business were stored with `business_id = 2`, confirming that booking writes are also business-specific.
+
+## Current Date Storage Rule
+
+All new booking dates should be stored in PostgreSQL using:
+
+`YYYY-MM-DD`
+
+Example:
+
+`2026-09-12`
+
+Natural-language dates should only be used for customer-facing conversation.
+
+The database should not receive new values such as:
+
+- `Monday`
+- `saturday`
+- `next Wednesday`
+- `September 5th`
+
+Some historical test rows still contain these formats from before normalization was implemented.
+
+## Current Verified State
+
+As of 31 August 2026, the production system has verified:
+
+- multi-business service isolation
+- business-specific timezone configuration
+- business-specific locale configuration
+- relative date resolution
+- ISO date storage for new bookings
+- human-readable customer date formatting
+- UK numeric date booking
+- US business booking
+- provider-specific booking
+- provider/service compatibility
+- double-booking conflict detection
+- alternative-time suggestions
+- pending booking continuation after a conflict
+- returning-client recognition
+- rescheduling while preserving existing booking details
+
+The master architecture remains industry-agnostic. Salon and beauty businesses are currently being used as development test environments.
+
+## Immediate Development Priorities
+
+The next major production-hardening priorities include:
+
+1. Replace IP-based conversation/pending-booking identity with a stable browser session ID.
+2. Continue testing locale-specific numeric date interpretation, especially ambiguous dates between `en-GB` and `en-US`.
+3. Clean or migrate historical booking rows that use legacy date formats.
+4. Continue hardening rescheduling and returning-customer conversation flows.
+5. Audit remaining hard-coded customer-facing replies for natural writing style and prohibited em/en dashes.
+6. Continue development of the production-grade customer widget and owner-facing booking/calendar experience.
+
+The system is now operating as a genuine multi-business booking engine rather than a single hard-coded salon bot.
+
+---
 # End of CURRENT_STATE.md
