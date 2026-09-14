@@ -585,6 +585,7 @@ const wantsToReschedule =
   /\b(appointment|booking|time|date|slot|it)\b/i.test(message);
 
     // Detect returning customer by phone number in the message or session
+const session = getSessionMemory(pendingKey);
     const phoneMatch = message.match(/\b0\d{10,14}\b/);
     let phoneToUse = null;
 
