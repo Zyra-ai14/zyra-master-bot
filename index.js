@@ -895,6 +895,21 @@ if (
     providerId: requestedProvider.id,
   });
 }
+
+        if (pending && !booking) {
+  const updatedPending = {
+    ...pending,
+    createdAt: Date.now(),
+    name: requestedName || pending.name,
+    phone: requestedPhone || pending.phone,
+    service: requestedService?.name || pending.service,
+    date: possibleDate || pending.date,
+    time: possibleTime || pending.time,
+    providerId: requestedProvider?.id || pending.providerId,
+  };
+
+  pendingBookings.set(pendingKey, updatedPending);
+}
         return res.json({ reply: aiReply });
       }
     }
