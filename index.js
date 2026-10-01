@@ -907,6 +907,7 @@ service: requestedService?.name || parsedBookingData?.service || pending.service
 date: possibleDate || parsedBookingData?.date || pending.date,
 time: possibleTime || parsedBookingData?.time || pending.time,
 providerId: requestedProvider?.id || pending.providerId,
+    };
   pendingBookings.set(pendingKey, updatedPending);
 }
         return res.json({ reply: aiReply });
