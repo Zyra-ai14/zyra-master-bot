@@ -815,9 +815,10 @@ Otherwise respond normally in plain text.
       });
 
       const aiReply = completion.choices[0]?.message?.content?.trim() || "";
-
+let parsedBookingData = null;
       try {
         const parsed = JSON.parse(aiReply);
+        parsedBookingData = parsed;
         if (
           parsed &&
           typeof parsed === "object" &&
@@ -902,12 +903,10 @@ if (
     createdAt: Date.now(),
     name: requestedName || pending.name,
     phone: requestedPhone || pending.phone,
-    service: requestedService?.name || pending.service,
-    date: possibleDate || pending.date,
-    time: possibleTime || pending.time,
-    providerId: requestedProvider?.id || pending.providerId,
-  };
-
+service: requestedService?.name || parsedBookingData?.service || pending.service,
+date: possibleDate || parsedBookingData?.date || pending.date,
+time: possibleTime || parsedBookingData?.time || pending.time,
+providerId: requestedProvider?.id || pending.providerId,
   pendingBookings.set(pendingKey, updatedPending);
 }
         return res.json({ reply: aiReply });
