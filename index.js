@@ -882,8 +882,7 @@ if (
   !providerOffersService &&
   requestedName &&
   requestedPhone &&
-  possibleDate &&
-  possibleTime
+  (possibleDate || possibleTime)
 ) {
   pendingBookings.set(pendingKey, {
     createdAt: Date.now(),
