@@ -835,7 +835,27 @@ let parsedBookingData = null;
       } catch {
         booking = null;
       }
+if (!booking && parsedBookingData) {
+  const missing = [];
 
+  if (!parsedBookingData.service) missing.push("service");
+  if (!parsedBookingData.date) missing.push("date");
+  if (!parsedBookingData.time) missing.push("time");
+  if (!(parsedBookingData.phone || knownClient?.phone || session?.phone)) {
+    missing.push("phone number");
+  }
+
+  if (missing.length > 0) {
+    const missingText =
+      missing.length === 1
+        ? missing[0]
+        : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+
+    return res.json({
+      reply: `Thanks. Could you please provide your ${missingText}?`,
+    });
+  }
+}
       if (!booking) {
         const isOnlyPhone = /^0\d{10,14}$/.test(message.trim());
 
