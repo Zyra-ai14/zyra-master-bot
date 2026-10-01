@@ -850,14 +850,17 @@ const requestedService = findBestServiceMatch(message, services);
 const requestedProvider = findProviderFromText(message, providers);
 
 const requestedNameMatch = message.match(
-  /\b(?:my name is|i am|i'm)\s+([a-z][a-z'-]*)/i
-);
+/\b(?:my name is|i am|i'm)\s+([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*)?)/i);
 
 const requestedName =
   requestedNameMatch?.[1] ||
   knownClient?.name ||
   session?.name ||
   null;
+
+        if (requestedNameMatch?.[1]) {
+  setSessionMemory(pendingKey, { name: requestedNameMatch[1] });
+}
 
 const requestedPhone =
   earlyPhone ||
