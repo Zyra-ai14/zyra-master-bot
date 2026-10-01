@@ -836,115 +836,85 @@ let parsedBookingData = null;
         booking = null;
       }
 if (!booking && parsedBookingData) {
-  const missing = [];
+  const combinedBookingData = {
+    name:
+      parsedBookingData.name ||
+      requestedName ||
+      pending?.name ||
+      knownClient?.name ||
+      session?.name ||
+      null,
 
-  if (!parsedBookingData.service) missing.push("service");
-  if (!parsedBookingData.date) missing.push("date");
-  if (!parsedBookingData.time) missing.push("time");
-  if (!(parsedBookingData.phone || knownClient?.phone || session?.phone)) {
-    missing.push("phone number");
-  }
+    phone:
+      parsedBookingData.phone ||
+      requestedPhone ||
+      pending?.phone ||
+      knownClient?.phone ||
+      session?.phone ||
+      null,
 
- if (missing.length > 0) {
+    service:
+      parsedBookingData.service ||
+      pending?.service ||
+      null,
+
+    date:
+      parsedBookingData.date ||
+      possibleDate ||
+      pending?.date ||
+      null,
+
+    time:
+      parsedBookingData.time ||
+      possibleTime ||
+      pending?.time ||
+      null,
+
+    providerId:
+      requestedProvider?.id ||
+      pending?.providerId ||
+      null,
+
+    notes:
+      parsedBookingData.notes ||
+      pending?.notes ||
+      "",
+  };
+
   pendingBookings.set(pendingKey, {
     ...(pending || {}),
+    ...combinedBookingData,
     createdAt: Date.now(),
-    name: parsedBookingData.name || requestedName || pending?.name || null,
-    phone: parsedBookingData.phone || requestedPhone || pending?.phone || null,
-    service: parsedBookingData.service || pending?.service || null,
-    date: parsedBookingData.date || possibleDate || pending?.date || null,
-    time: parsedBookingData.time || possibleTime || pending?.time || null,
-    providerId: requestedProvider?.id || pending?.providerId || null,
   });
 
-  const missingText =
-    missing.length === 1
-      ? missing[0]
-      : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+  const missing = [];
 
-  return res.json({
-    reply: `Thanks. Could you please provide your ${missingText}?`,
-  });
+  if (!combinedBookingData.service) missing.push("service");
+  if (!combinedBookingData.date) missing.push("date");
+  if (!combinedBookingData.time) missing.push("time");
+  if (!combinedBookingData.phone) missing.push("phone number");
+
+  if (missing.length > 0) {
+    const missingText =
+      missing.length === 1
+        ? missing[0]
+        : `${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+
+    return res.json({
+      reply: `Thanks. Could you please provide your ${missingText}?`,
+    });
+  }
+
+  booking = {
+    ...parsedBookingData,
+    name: combinedBookingData.name,
+    phone: combinedBookingData.phone,
+    service: combinedBookingData.service,
+    date: combinedBookingData.date,
+    time: combinedBookingData.time,
+    notes: combinedBookingData.notes,
+  };
 }
-}
-      if (!booking) {
-        const isOnlyPhone = /^0\d{10,14}$/.test(message.trim());
-
-        if (isOnlyPhone && knownClient && lastBooking) {
-          const providerName =
-            providers.find((p) => p.id === lastBooking.provider_id)?.name ||
-            "your usual stylist";
-
-          return res.json({
-reply: `Welcome back ${knownClient.name}. Would you like to book ${lastBooking.service} with ${providerName} again?`,          });
-        }
-const requestedService = findBestServiceMatch(message, services);
-const requestedProvider = findProviderFromText(message, providers);
-
-const requestedNameMatch = message.match(
-/\b(?:my name is|i am|i'm)\s+([a-z][a-z'-]*(?:\s+[a-z][a-z'-]*)?)/i);
-
-const requestedName =
-  requestedNameMatch?.[1] ||
-  knownClient?.name ||
-  session?.name ||
-  null;
-
-        if (requestedNameMatch?.[1]) {
-  setSessionMemory(pendingKey, { name: requestedNameMatch[1] });
-}
-
-const requestedPhone =
-  earlyPhone ||
-  knownClient?.phone ||
-  session?.phone ||
-  null;
-
-const providerOffersService =
-  requestedProvider &&
-  requestedService &&
-  requestedProvider.services?.some(
-    (serviceName) =>
-      serviceName.toLowerCase() === requestedService.name.toLowerCase()
-  );
-
-if (
-  requestedProvider &&
-  requestedService &&
-  !providerOffersService &&
-  requestedName &&
-  requestedPhone &&
-  (possibleDate || possibleTime)
-) {
-  pendingBookings.set(pendingKey, {
-    createdAt: Date.now(),
-    name: requestedName,
-    phone: requestedPhone,
-    service: requestedService.name,
-    date: possibleDate,
-    time: possibleTime,
-    notes: "",
-    providerId: requestedProvider.id,
-  });
-}
-
-        if (pending && !booking) {
-  const updatedPending = {
-    ...pending,
-    createdAt: Date.now(),
-    name: requestedName || pending.name,
-    phone: requestedPhone || pending.phone,
-service: requestedService?.name || parsedBookingData?.service || pending.service,
-date: possibleDate || parsedBookingData?.date || pending.date,
-time: possibleTime || parsedBookingData?.time || pending.time,
-providerId: requestedProvider?.id || pending.providerId,
-    };
-  pendingBookings.set(pendingKey, updatedPending);
-}
-        return res.json({ reply: aiReply });
-      }
-    }
-
     // Force correct stored name for returning clients
     if (
       knownClient &&
