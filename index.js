@@ -1136,7 +1136,7 @@ const customerDate = formatCustomerDate(booking.date, businessLocale);
       return res.json({
         reply: replyText,
       });
- 
+ }
   } catch (err) {
     console.error("Chat endpoint error:", err);
     return res.status(500).json({
