@@ -840,7 +840,6 @@ if (!booking && parsedBookingData) {
   const combinedBookingData = {
     name:
       parsedBookingData.name ||
-      requestedName ||
       pending?.name ||
       knownClient?.name ||
       session?.name ||
@@ -848,7 +847,6 @@ if (!booking && parsedBookingData) {
 
     phone:
       parsedBookingData.phone ||
-      requestedPhone ||
       pending?.phone ||
       knownClient?.phone ||
       session?.phone ||
@@ -872,8 +870,7 @@ if (!booking && parsedBookingData) {
       null,
 
     providerId:
-      requestedProvider?.id ||
-      pending?.providerId ||
+parsedBookingData.providerId ||      pending?.providerId ||
       null,
 
     notes:
@@ -926,8 +923,7 @@ if (!booking && parsedBookingData) {
     }
 
     // Force correct stored phone from session/known client if needed
-    if (!booking.phone && (knownClient?.phone || session?.phone)) {
-      booking.phone = knownClient?.phone || session?.phone;
+if (booking && !booking.phone && (knownClient?.phone || session?.phone)) {      booking.phone = knownClient?.phone || session?.phone;
     }
 
     if (booking && services.length > 0) {
@@ -1136,7 +1132,7 @@ const customerDate = formatCustomerDate(booking.date, businessLocale);
       return res.json({
         reply: replyText,
       });
- }
+   } }
   } catch (err) {
     console.error("Chat endpoint error:", err);
     return res.status(500).json({
