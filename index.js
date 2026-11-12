@@ -532,8 +532,8 @@ if (!message) {      return res.json({ reply: "You didn't send a message." });
     const earlyPhoneMatch = message.match(/\b0\d{10,14}\b/);
 const earlyPhone = earlyPhoneMatch ? earlyPhoneMatch[0] : null;
 const pendingKey = getPendingBookingKey(req, slug, earlyPhone, sessionId);
-   const businessResult = await pool.query(
-  "SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",
+console.log("ZYRA DATABASE QUERY STARTING");
+const businessResult = await pool.query(  "SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",
   [slug]
 );
     const business = businessResult.rows[0];
