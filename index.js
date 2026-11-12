@@ -27,6 +27,8 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 5000,
+    query_timeout: 12000,
+  statement_timeout: 12000,
 });
 const DEFAULT_BUSINESS_SLUG = "demo";
 
