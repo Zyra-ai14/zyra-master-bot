@@ -522,10 +522,10 @@ async function getLatestActiveBooking(clientId) {
 }
 
 app.post("/chat", async (req, res) => {
-  try {
+  console.log("ZYRA CHAT REQUEST RECEIVED");
+try {
 const { message, businessSlug, sessionId } = req.body;
-    if (!message) {
-      return res.json({ reply: "You didn't send a message." });
+if (!message) {      return res.json({ reply: "You didn't send a message." });
     }
 
     const slug = businessSlug || DEFAULT_BUSINESS_SLUG;
