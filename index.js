@@ -26,8 +26,8 @@ const client = new OpenAI({
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 5000,
 });
-
 const DEFAULT_BUSINESS_SLUG = "demo";
 
 const BOOKING_API_URL =
