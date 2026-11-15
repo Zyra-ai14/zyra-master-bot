@@ -1133,8 +1133,7 @@ const customerDate = formatCustomerDate(booking.date, businessLocale);
       return res.json({
         reply: replyText,
       });
-   } }
-  } catch (err) {
+} else { return res.json({ reply: aiReply || "Sorry, I couldn't generate a response. Please try again." }); } }  } catch (err) {
     console.error("Chat endpoint error:", err);
     return res.status(500).json({
       reply: "Something went wrong on my side. Please try again.",
