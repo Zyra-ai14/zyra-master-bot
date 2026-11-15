@@ -712,8 +712,8 @@ time: possibleTime || pending.time,
         )
         .join("\n");
 
-      const completion = await client.chat.completions.create({
-        model: "gpt-4.1-mini",
+console.log("ZYRA OPENAI REQUEST STARTING");
+const completion = await client.chat.completions.create({        model: "gpt-4.1-mini",
         messages: [
           {
             role: "system",
