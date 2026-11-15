@@ -536,8 +536,8 @@ console.log("ZYRA DATABASE QUERY STARTING");
 const businessResult = await pool.query(  "SELECT id, name, timezone, locale FROM businesses WHERE slug = $1",
   [slug]
 );
-    const business = businessResult.rows[0];
-    if (!business) {
+console.log("ZYRA DATABASE QUERY COMPLETED");
+const business = businessResult.rows[0];    if (!business) {
       console.error("No business found for slug:", slug);
       return res.json({
         reply:
