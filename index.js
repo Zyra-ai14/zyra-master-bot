@@ -932,8 +932,7 @@ if (booking && !booking.phone && (knownClient?.phone || session?.phone)) {      
       if (match) booking.service = match.name;
     }
 
-    if (booking) {
-      const notes = booking.notes || "";
+if (booking && (!booking.name || !String(booking.name).trim())) { return res.json({ reply: "Of course. Could I take your full name for the booking, please?" }); } if (booking) {      const notes = booking.notes || "";
 
       const providerFromMessage = findProviderFromText(message, providers);
 
