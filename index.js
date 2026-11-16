@@ -682,8 +682,7 @@ if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)
     time: possibleTime || existingActiveBooking.time,
     notes: existingActiveBooking.notes || "",
   };
-} else if (pending) {      booking = {
-        name: pending.name,
+} else if (false && pending) {      booking = {        name: pending.name,
         phone: pending.phone,
         service: pending.service,
 date: possibleDate || pending.date,
@@ -811,14 +810,10 @@ Return booking JSON like this:
 Otherwise respond normally in plain text.
 `,
           },
-          { role: "user", content: message },
-        ],
+{ role: "user", content: pending ? `Previous unfinished booking: ${JSON.stringify(pending)}\nCustomer's latest message: ${message}\nUse the saved booking details and update them with any new information. Do not ask again for details already provided. If all required details are present, return the complete booking JSON.` : message },        ],
       });
 
-      const aiReply = completion.choices[0]?.message?.content?.trim() || "";
-let parsedBookingData = null;
-      try {
-        const parsed = JSON.parse(aiReply);
+let aiReply = completion.choices[0]?.message?.content?.trim() || ""; if (pending) { try { const p = JSON.parse(aiReply); if (p && typeof p === "object" && !Array.isArray(p)) { p.name ||= pending.name; p.phone ||= pending.phone; p.service ||= pending.service; p.date ||= pending.date; p.time ||= pending.time; aiReply = JSON.stringify(p); } } catch {} } let parsedBookingData = null; try {        const parsed = JSON.parse(aiReply);
         parsedBookingData = parsed;
         if (
           parsed &&
@@ -931,9 +926,7 @@ if (booking && !booking.phone && (knownClient?.phone || session?.phone)) {      
       if (match) booking.service = match.name;
     }
 
-if (booking && (!booking.name || !String(booking.name).trim())) { pendingBookings.set(pendingKey, { ...(pending || {}), ...booking, createdAt: Date.now() }); return res.json({ reply: "Of course. Could I take your full name for the booking, please?" }); } if (booking) {
-      const providerFromMessage = findProviderFromText(message, providers);
-
+if (booking && (!booking.name || !String(booking.name).trim())) { pendingBookings.set(pendingKey, { ...(pending || {}), ...booking, createdAt: Date.now() }); return res.json({ reply: "Of course. Could I take your full name for the booking, please?" }); } if (booking && (!booking.phone || !String(booking.phone).trim())) { pendingBookings.set(pendingKey, { ...(pending || {}), ...booking, createdAt: Date.now() }); return res.json({ reply: "Could I take your phone number for the booking, please?" }); } if (booking) {const notes = booking?.notes || ""; const providerFromMessage = findProviderFromText(message, providers);
 const providerMatch =
   providerFromMessage ||
   (pending
@@ -1130,9 +1123,7 @@ const customerDate = formatCustomerDate(booking.date, businessLocale);
       return res.json({
         reply: replyText,
       });
-} else { return res.json({ reply: aiReply || "Sorry, I couldn't generate a response. Please try again." }); } }  } catch (err) {
-    console.error("Chat endpoint error:", err);
-    return res.status(500).json({
+} else { if (possibleDate || possibleTime || pending) { const matchedService = services.find(s => message.toLowerCase().includes(s.name.toLowerCase())); const saved = { ...(pending || {}), service: matchedService?.name || pending?.service || null, date: possibleDate || pending?.date || null, time: possibleTime || pending?.time || null, phone: phoneToUse || pending?.phone || session?.phone || null, createdAt: Date.now() }; pendingBookings.set(pendingKey, saved); } return res.json({ reply: aiReply || "Sorry, I couldn't generate a response. Please try again." }); } } } catch (err) {    return res.status(500).json({
       reply: "Something went wrong on my side. Please try again.",
     });
   }
