@@ -682,8 +682,7 @@ if (existingActiveBooking && wantsToReschedule && (possibleTime || possibleDate)
     time: possibleTime || existingActiveBooking.time,
     notes: existingActiveBooking.notes || "",
   };
-} else if (pending && (possibleTime || possibleDate)) {
-      booking = {
+} else if (pending) {      booking = {
         name: pending.name,
         phone: pending.phone,
         service: pending.service,
@@ -932,8 +931,7 @@ if (booking && !booking.phone && (knownClient?.phone || session?.phone)) {      
       if (match) booking.service = match.name;
     }
 
-if (booking && (!booking.name || !String(booking.name).trim())) { return res.json({ reply: "Of course. Could I take your full name for the booking, please?" }); } if (booking) {      const notes = booking.notes || "";
-
+if (booking && (!booking.name || !String(booking.name).trim())) { pendingBookings.set(pendingKey, { ...(pending || {}), ...booking, createdAt: Date.now() }); return res.json({ reply: "Of course. Could I take your full name for the booking, please?" }); } if (booking) {
       const providerFromMessage = findProviderFromText(message, providers);
 
 const providerMatch =
